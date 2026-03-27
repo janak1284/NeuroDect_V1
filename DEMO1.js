@@ -5,8 +5,10 @@ import {
   CheckCircle2, AlertTriangle, Terminal, Target, ScanFace, 
   ChevronRight, Sparkles, ActivitySquare, Fingerprint, ShieldAlert
 } from 'lucide-react';
+import NeuralReflexTest from './NeuralReflexTest';
 
-// --- GLOBAL FX & UTILS ---
+// ... (rest of imports)
+
 
 const CustomCursor = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -93,7 +95,7 @@ const FaceTest = ({ onComplete }) => {
   }, [onComplete]);
 
   return (
-    <div className="flex flex-col items-center p-8 h-[400px] justify-center relative">
+    <div className="flex flex-col items-center p-8 h-[600px] justify-center relative">
       <div className="relative w-64 h-64 rounded-full border border-cyan-500/30 bg-slate-900/50 flex items-center justify-center overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)]">
         <ScanFace className="w-24 h-24 text-cyan-500/20 absolute" />
         
@@ -145,7 +147,7 @@ const AudioTest = ({ onComplete }) => {
   }, [onComplete]);
 
   return (
-    <div className="flex flex-col items-center p-8 h-[400px] justify-center relative">
+    <div className="flex flex-col items-center p-8 h-[600px] justify-center relative">
       <motion.div 
         initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         className="w-20 h-20 rounded-full bg-violet-500/20 flex items-center justify-center mb-12 shadow-[0_0_40px_rgba(139,92,246,0.3)] border border-violet-400/30 relative"
@@ -197,7 +199,7 @@ const MotorTest = ({ onComplete }) => {
   }, [onComplete]);
 
   return (
-    <div ref={containerRef} className="flex flex-col items-center p-8 h-[400px] justify-center relative overflow-hidden">
+    <div ref={containerRef} className="flex flex-col items-center p-8 h-[600px] justify-center relative overflow-hidden">
       <div className="absolute top-8 text-center w-full">
          <p className="text-sm font-mono text-emerald-400 uppercase tracking-widest animate-pulse">Hold cursor inside the target</p>
       </div>
@@ -251,7 +253,7 @@ const CognitiveTest = ({ onComplete }) => {
   };
 
   return (
-    <div className="flex flex-col items-center p-8 h-[400px] justify-center relative w-full">
+    <div className="flex flex-col items-center p-8 h-[600px] justify-center relative w-full">
       <div className="text-center mb-12">
         <h3 className="text-sm font-mono text-slate-400 uppercase tracking-widest mb-2">Cognitive Latency Test</h3>
         <p className="text-xl font-light">Click the area the moment it turns <span className="text-emerald-400 font-bold">Green</span></p>
@@ -310,12 +312,43 @@ const AnalyzingScreen = ({ onComplete }) => {
   );
 };
 
+// --- UTILS ---
+
+const calculateRisks = (results) => {
+  // Extract results or use defaults for demo
+  const motorRT = results.motor || 250;
+  const facialRT = results.facial || 300;
+  
+  // Parkinson's: High dependence on Motor RT
+  const parkinsons = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 2 + ((facialRT - 300) / 10) * 1 + 15));
+  
+  // Stroke: High dependence on Facial RT
+  const stroke = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 2.5 + ((motorRT - 250) / 10) * 0.5 + 10));
+
+  // Bell's Palsy: Almost entirely Facial RT
+  const bellsPalsy = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 3 + 5));
+
+  // ALS: High dependence on Motor RT
+  const als = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 2.2 + 8));
+
+  return [
+    { label: "Parkinson's", value: Math.round(parkinsons), color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Acute Stroke", value: Math.round(stroke), color: stroke > 70 ? "text-rose-400" : stroke > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Bell's Palsy", value: Math.round(bellsPalsy), color: bellsPalsy > 70 ? "text-rose-400" : bellsPalsy > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "ALS", value: Math.round(als), color: als > 70 ? "text-rose-400" : als > 40 ? "text-amber-400" : "text-emerald-400" },
+  ];
+};
+
 // --- RESULTS DASHBOARD ---
 
-const ResultsDashboard = () => {
-  const CircularProgress = ({ value, label, color, subLabel }) => {
-    const circumference = 2 * Math.PI * 38; // r=38
+const ResultsDashboard = ({ results }) => {
+  const riskScores = calculateRisks(results);
+  const mainRisk = riskScores.reduce((prev, current) => (prev.value > current.value) ? prev : current);
+
+  const CircularProgress = ({ value, label, color }) => {
+    const circumference = 2 * Math.PI * 38;
     const strokeDashoffset = circumference - (value / 100) * circumference;
+    const subLabel = value > 70 ? 'HIGH RISK' : value > 40 ? 'ELEVATED' : 'NOMINAL';
     
     return (
       <div className="flex flex-col items-center">
@@ -337,10 +370,10 @@ const ResultsDashboard = () => {
             <span className="text-xs text-slate-400">%</span>
           </div>
         </div>
-        <h4 className="font-mono text-xs uppercase tracking-widest text-slate-300 mt-2">{label}</h4>
+        <h4 className="font-mono text-[10px] uppercase tracking-widest text-slate-300 mt-2 text-center">{label}</h4>
         <p className={`text-[10px] mt-1 font-mono px-2 py-0.5 rounded border ${
           value > 70 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 
-          value > 30 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 
+          value > 40 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 
           'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
         }`}>{subLabel}</p>
       </div>
@@ -359,10 +392,9 @@ const ResultsDashboard = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-8 mb-10">
-          <CircularProgress value={84} label="Parkinson's" color="text-rose-400" subLabel="HIGH RISK" />
-          <CircularProgress value={12} label="Stroke" color="text-emerald-400" subLabel="NOMINAL" />
-          <CircularProgress value={28} label="Bell's Palsy" color="text-emerald-400" subLabel="NOMINAL" />
-          <CircularProgress value={65} label="Ess. Tremor" color="text-amber-400" subLabel="ELEVATED" />
+          {riskScores.map((risk, idx) => (
+            <CircularProgress key={idx} value={risk.value} label={risk.label} color={risk.color} />
+          ))}
         </div>
 
         <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 backdrop-blur-md">
@@ -370,7 +402,7 @@ const ResultsDashboard = () => {
             <AlertTriangle size={14} /> Clinical Action Advised
           </h5>
           <p className="text-sm text-rose-200/70 font-light leading-relaxed">
-            Biomarker intersection (Resting Tremor 4.8Hz + Bradykinesia latency + Hypophonia) strongly indicates early-stage Parkinsonian traits.
+            Biomarker intersection ({results.motor}ms motor latency + {results.facial}ms facial response) indicates potential {mainRisk.label} markers.
           </p>
         </div>
       </div>
@@ -385,25 +417,27 @@ const ResultsDashboard = () => {
           <div className="space-y-4">
             <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex justify-between items-center group hover:bg-white/10 transition-colors">
               <div>
-                <div className="text-emerald-400 font-mono text-xs mb-1">FACIAL METRICS</div>
-                <div className="text-slate-200 text-sm">Symmetry Ratio: 0.98 (Normal)</div>
+                <div className="text-emerald-400 font-mono text-xs mb-1">MOTOR LATENCY</div>
+                <div className="text-slate-200 text-sm">{results.motor}ms (Baseline: 250ms)</div>
               </div>
-              <CheckCircle2 className="text-emerald-500/50" />
+              <Activity className={results.motor > 400 ? "text-rose-500" : "text-emerald-500/50"} />
             </div>
             
-            <div className="bg-amber-500/5 border border-amber-500/10 rounded-lg p-4 flex justify-between items-center group hover:bg-amber-500/10 transition-colors">
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex justify-between items-center group hover:bg-white/10 transition-colors">
               <div>
-                <div className="text-amber-400 font-mono text-xs mb-1">ACOUSTIC METRICS</div>
-                <div className="text-slate-200 text-sm">Hypophonia Detected (Volume drop)</div>
+                <div className="text-cyan-400 font-mono text-xs mb-1">FACIAL LATENCY</div>
+                <div className="text-slate-200 text-sm">{results.facial}ms (Baseline: 300ms)</div>
               </div>
-              <Activity className="text-amber-500/50" />
+              <ScanFace className={results.facial > 450 ? "text-rose-500" : "text-cyan-500/50"} />
             </div>
 
             <div className="bg-rose-500/5 border border-rose-500/10 rounded-lg p-4 flex justify-between items-center relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500" />
               <div>
-                <div className="text-rose-400 font-mono text-xs mb-1">MOTOR METRICS [CRITICAL]</div>
-                <div className="text-slate-200 text-sm">Resting Micro-tremor isolated at 4.8Hz.</div>
+                <div className="text-rose-400 font-mono text-xs mb-1">DIAGNOSTIC INSIGHT</div>
+                <div className="text-slate-200 text-sm">
+                  {mainRisk.value > 70 ? `Critical delay in ${mainRisk.label === 'Parkinson\'s' ? 'motor initiation' : 'facial nerve response'}.` : 'No critical neurological delays detected.'}
+                </div>
               </div>
               <ActivitySquare className="text-rose-500 animate-pulse" />
             </div>
@@ -411,7 +445,7 @@ const ResultsDashboard = () => {
         </div>
 
         <div className="mt-10 pt-8 border-t border-white/10 flex flex-col sm:flex-row gap-4 items-center justify-between">
-          <p className="text-xs text-slate-500 font-mono">Report ID: DN-8839-X2</p>
+          <p className="text-xs text-slate-500 font-mono">Report ID: DN-{Math.floor(Math.random()*9000)+1000}-X2</p>
           <button className="relative group overflow-hidden rounded-full p-[1px]">
             <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#f43f5e_0%,#3f3f46_50%,#f43f5e_100%)]" />
             <div className="relative bg-slate-950 px-8 py-3 rounded-full flex items-center gap-3 transition-all group-hover:bg-slate-900">
@@ -430,19 +464,31 @@ const ResultsDashboard = () => {
 export default function App() {
   const [stage, setStage] = useState('landing'); // landing, test, analyzing, results
   const [currentTest, setCurrentTest] = useState(0);
+  const [testResults, setTestResults] = useState({ motor: 250, facial: 300 });
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const tests = [
-    { title: "Facial Asymmetry", icon: <ScanFace />, component: FaceTest, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" },
-    { title: "Acoustic Cadence", icon: <Ear />, component: AudioTest, color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/30" },
-    { title: "Motor Stability", icon: <Hand />, component: MotorTest, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" },
-    { title: "Cognitive Latency", icon: <Brain />, component: CognitiveTest, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" }
+    { title: "Facial Asymmetry", icon: <ScanFace />, component: FaceTest, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30", description: "Detects muscle symmetry using landmark analysis." },
+    { title: "Acoustic Cadence", icon: <Ear />, component: AudioTest, color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/30", description: "Analyzes voice frequency for signs of hypophonia." },
+    { title: "Motor Stability", icon: <Hand />, component: MotorTest, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", description: "Measures micro-tremors via cursor stability." },
+    { title: "Neural Reflex", icon: <Brain />, component: NeuralReflexTest, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30", description: "Evaluates neuro-motor latency using the Peace Symbol test." }
   ];
 
   const handleTestComplete = (data) => {
+    if (data && data.motor) {
+      setTestResults(prev => ({ ...prev, motor: data.motor, facial: data.facial }));
+    }
+    
+    setIsTransitioning(true);
+  };
+
+  const proceedToNext = () => {
     if (currentTest < tests.length - 1) {
       setCurrentTest(prev => prev + 1);
+      setIsTransitioning(false);
     } else {
       setStage('analyzing');
+      setIsTransitioning(false);
     }
   };
 
@@ -520,8 +566,8 @@ export default function App() {
           )}
 
           {/* TEST SEQUENCE */}
-          {stage === 'test' && (
-            <GlassContainer key="test" className="w-full max-w-3xl overflow-hidden flex flex-col min-h-[500px]">
+          {stage === 'test' && !isTransitioning && (
+            <GlassContainer key="test" className="w-full max-w-5xl overflow-hidden flex flex-col min-h-[700px]">
               <div className="p-6 border-b border-white/10 bg-black/40 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${tests[currentTest].bg} ${tests[currentTest].border} ${tests[currentTest].color} shadow-lg`}>
@@ -548,6 +594,50 @@ export default function App() {
                    </motion.div>
                 </AnimatePresence>
               </div>
+            </GlassContainer>
+          )}
+
+          {/* TRANSITION SCREEN */}
+          {isTransitioning && (
+            <GlassContainer key="transition" className="max-w-xl w-full p-12 text-center border-emerald-500/30">
+              <div className="w-20 h-20 rounded-2xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-8 border border-emerald-500/30">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+              </div>
+              <h2 className="text-3xl font-black uppercase tracking-tight text-white mb-2">Test Complete</h2>
+              
+              {currentTest < tests.length - 1 ? (
+                <>
+                  <p className="text-slate-400 mb-10 font-light">Data captured successfully. Are you ready to proceed to the <span className="text-emerald-400 font-bold">{tests[currentTest + 1]?.title}</span>?</p>
+                  
+                  <motion.button 
+                    onClick={proceedToNext}
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    className="relative group inline-flex"
+                  >
+                    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur opacity-70 group-hover:opacity-100 transition duration-500" />
+                    <div className="relative px-12 py-4 bg-[#030712] rounded-full flex items-center gap-4 border border-white/10">
+                      <span className="font-mono text-lg font-bold text-white tracking-widest uppercase">Start Next Test</span>
+                      <ChevronRight size={20} className="text-emerald-400" />
+                    </div>
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400 mb-10 font-light">All tests completed successfully. Ready to generate your neurological risk assessment?</p>
+                  
+                  <motion.button 
+                    onClick={proceedToNext}
+                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                    className="relative group inline-flex"
+                  >
+                    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur opacity-70 group-hover:opacity-100 transition duration-500" />
+                    <div className="relative px-12 py-4 bg-[#030712] rounded-full flex items-center gap-4 border border-white/10">
+                      <span className="font-mono text-lg font-bold text-white tracking-widest uppercase">Generate Report</span>
+                      <ActivitySquare size={20} className="text-emerald-400" />
+                    </div>
+                  </motion.button>
+                </>
+              )}
             </GlassContainer>
           )}
 
