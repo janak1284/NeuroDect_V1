@@ -24,20 +24,25 @@ export const calculateRisks = (results) => {
 /**
  * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
  */
-export const analyzeResults = async (motor_ms, facial_ms, user_id = null) => {
+export const analyzeResults = async (motor_ms, facial_ms, user_id = null, extraData = {}) => {
   try {
+    const payload = { 
+      user_id, 
+      motor_ms: parseFloat(motor_ms) || 450, 
+      facial_ms: parseFloat(facial_ms) || 500,
+      asymmetry_index: parseFloat(extraData.asymmetry) || 0.0,
+      tremor_hz: parseFloat(extraData.tremor_hz) || 0.0,
+      voice_jitter: parseFloat(extraData.acoustic) || 0.0
+    };
+
     const response = await fetch('http://localhost:8000/analyze_reaction', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        user_id, 
-        motor_ms, 
-        facial_ms,
-        asymmetry_index: 0.0, // Should be passed from FaceTest results in a full implementation
-        tremor_hz: 0.0,        // Should be passed from MotorTest results
-        voice_jitter: 0.0      // Should be passed from AudioTest results
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!response.ok) throw new Error('Backend analysis failed');
+    
     return await response.json();
   } catch (err) {
     console.error("API Analysis Error:", err);

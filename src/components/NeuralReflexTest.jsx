@@ -196,67 +196,89 @@ const NeuralReflexTest = ({ onComplete }) => {
   };
 
   return (
-    <div className="p-8 w-full h-full text-white flex flex-col justify-center">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="p-3 bg-emerald-500/20 rounded-xl">
-          <Brain className="text-emerald-400" />
+    <div className="p-10 w-full h-full text-slate-900 flex flex-col justify-center bg-white/40">
+      <div className="flex items-center gap-6 mb-10">
+        <div className="p-4 bg-teal-50 rounded-2xl shadow-sm border border-teal-100">
+          <Brain className="text-teal-600 w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">Neural Reflex Test</h2>
-          <p className="text-slate-400 text-sm">Measures Motor & Gesture response times</p>
+          <h2 className="text-3xl font-bold tracking-tight">Neural Reflex Protocol</h2>
+          <p className="text-slate-500 font-medium">Measuring synchronization between motor and cognitive responses</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Webcam View */}
-        <div className="relative rounded-2xl overflow-hidden bg-black border border-white/5 aspect-video flex items-center justify-center">
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-50" />
+        <div className="relative rounded-[2rem] overflow-hidden bg-slate-100 border border-slate-200 aspect-video flex items-center justify-center shadow-medical">
+          <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent pointer-events-none" />
+          
           {testState === 'idle' && (
-            <button onClick={startTest} className="relative z-10 px-8 py-3 bg-emerald-500 rounded-full font-bold hover:bg-emerald-400 transition-all">
-              Start Screening
+            <button onClick={startTest} className="relative z-10 px-10 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-medical-lg hover:bg-blue-700 transition-all active:scale-95">
+              Initialize Screening
             </button>
           )}
-          {testState === 'calibrating' && <p className="animate-pulse text-cyan-400 text-xl font-mono">CALIBRATING...</p>}
-          {testState === 'waiting' && <p className="animate-pulse text-rose-400 text-xl font-mono">GET READY...</p>}
+          {testState === 'calibrating' && (
+            <div className="bg-white/90 backdrop-blur-md px-8 py-4 rounded-2xl shadow-medical border border-blue-100">
+              <p className="animate-pulse text-blue-600 text-lg font-bold tracking-widest uppercase">Calibrating Sensors...</p>
+            </div>
+          )}
+          {testState === 'waiting' && (
+            <div className="bg-rose-600/90 text-white px-10 py-5 rounded-2xl shadow-medical-lg border border-rose-400">
+              <p className="animate-pulse text-xl font-bold tracking-[0.2em] uppercase">Prepare Response...</p>
+            </div>
+          )}
           {testState === 'ready' && (
-            <div onClick={handleMotorClick} className="absolute inset-0 bg-emerald-500/80 flex flex-col items-center justify-center cursor-pointer">
-              <Target size={64} className="animate-ping" />
-              <p className="text-2xl font-black mt-4">SHOW ✌️ & CLICK!</p>
+            <div onClick={handleMotorClick} className="absolute inset-0 bg-blue-600/80 flex flex-col items-center justify-center cursor-pointer transition-colors hover:bg-blue-600/90">
+              <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-medical-xl animate-pulse">
+                <Target size={48} className="text-blue-600" />
+              </div>
+              <p className="text-2xl font-bold mt-6 text-white tracking-tight uppercase">Perform Gesture & Click</p>
             </div>
           )}
           {testState === 'results' && (
-            <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center p-6 text-center">
-              <CheckCircle2 size={48} className="text-emerald-400 mb-2" />
-              <h3 className="text-xl font-bold">Test Complete</h3>
-              <p className="text-slate-400 text-sm mt-2">Analysis Synchronized</p>
+            <div className="absolute inset-0 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center transition-all">
+              <div className="w-20 h-20 rounded-full bg-teal-50 flex items-center justify-center mb-6 border border-teal-100">
+                <CheckCircle2 size={40} className="text-teal-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Analysis Synchronized</h3>
+              <p className="text-slate-500 font-medium">Clinical markers have been securely stored</p>
             </div>
           )}
         </div>
 
         {/* Results Panel */}
-        <div className="bg-white/5 rounded-2xl p-6 border border-white/10 flex flex-col">
-          <h3 className="text-sm font-mono text-slate-500 uppercase tracking-widest mb-6">Diagnostic Outputs</h3>
+        <div className="bg-white rounded-[2rem] p-8 border border-slate-200 flex flex-col shadow-medical transition-all">
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Diagnostic Stream</h3>
+            <div className="flex gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            </div>
+          </div>
           
           {testState !== 'results' ? (
-            <div className="flex flex-col items-center justify-center flex-grow text-slate-500 italic text-center">
-              <Activity className="mb-2 opacity-20" size={48} />
-              <p>Run the test to generate risks...</p>
-              {confidence > 0 && <p className="mt-2 text-xs">Previous Confidence: {confidence.toFixed(0)}%</p>}
+            <div className="flex flex-col items-center justify-center flex-grow text-slate-400 text-center py-10">
+              <div className="w-20 h-20 rounded-full bg-slate-50 flex items-center justify-center mb-6 opacity-40">
+                <Activity size={40} />
+              </div>
+              <p className="font-medium">Run protocol to generate evaluation</p>
+              {confidence > 0 && <p className="mt-4 text-[10px] font-bold uppercase tracking-widest text-blue-500">Last Confidence: {confidence.toFixed(0)}%</p>}
             </div>
           ) : (
-            <div className="space-y-4 overflow-y-auto max-h-[300px] pr-2">
+            <div className="space-y-4 overflow-y-auto max-h-[320px] pr-2 custom-scrollbar">
               {risks.map((risk, idx) => (
-                <div key={idx} className="p-4 bg-black/40 rounded-xl border border-white/5">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-slate-200 text-sm">{risk.disease}</span>
-                    <span className={`font-mono text-xs ${risk.risk_percentage > 60 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {risk.risk_percentage}% Risk
+                <div key={idx} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 transition-hover hover:border-blue-100 group">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-slate-800">{risk.disease}</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${risk.risk_percentage > 60 ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-teal-50 text-teal-600 border-teal-100'}`}>
+                      {risk.risk_percentage}% VARIANCE
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mb-2">
-                    <div className={`h-full transition-all duration-1000 ${risk.risk_percentage > 60 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${risk.risk_percentage}%` }} />
+                  <div className="w-full h-1.5 bg-white rounded-full overflow-hidden mb-3 border border-slate-100">
+                    <div className={`h-full transition-all duration-1000 ${risk.risk_percentage > 60 ? 'bg-rose-500' : 'bg-teal-500'}`} style={{ width: `${risk.risk_percentage}%` }} />
                   </div>
-                  <p className="text-[10px] text-slate-500 leading-tight italic">{risk.insight}</p>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed italic">{risk.insight}</p>
                 </div>
               ))}
             </div>
@@ -264,22 +286,25 @@ const NeuralReflexTest = ({ onComplete }) => {
         </div>
       </div>
 
-      <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-center">
-        <div className="flex gap-8">
-          <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase">Motor Latency</p>
-            <p className="text-xl font-bold font-mono text-emerald-400">{motorRT || '--'} ms</p>
+      <div className="mt-12 pt-8 border-t border-slate-100 flex justify-between items-end">
+        <div className="flex gap-12">
+          <div className="space-y-1">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Motor Latency</p>
+            <p className="text-2xl font-bold text-blue-600">{motorRT ? `${motorRT}ms` : '--'}</p>
           </div>
-          <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase">Gesture Latency</p>
-            <p className="text-xl font-bold font-mono text-cyan-400">{gestureRT || '--'} ms</p>
+          <div className="space-y-1">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Gesture Latency</p>
+            <p className="text-2xl font-bold text-teal-600">{gestureRT ? `${gestureRT}ms` : '--'}</p>
           </div>
-          <div>
-            <p className="text-[10px] text-slate-500 font-mono uppercase">Confidence</p>
-            <p className="text-xl font-bold font-mono text-violet-400">{confidence ? `${confidence.toFixed(0)}%` : '--'}</p>
+          <div className="space-y-1">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Confidence</p>
+            <p className="text-2xl font-bold text-indigo-600">{confidence ? `${confidence.toFixed(0)}%` : '--'}</p>
           </div>
         </div>
-        <ShieldAlert className="text-white/10" size={40} />
+        <div className="flex flex-col items-end gap-2 opacity-30">
+          <ShieldAlert size={32} className="text-slate-400" />
+          <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-slate-400">Clinical-XAI-Core</span>
+        </div>
       </div>
     </div>
   );

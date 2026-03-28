@@ -1,50 +1,153 @@
 import React, { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
-import { Fingerprint } from 'lucide-react';
-import { CustomCursor, AmbientBackground } from './components/UI/UIComponents';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Fingerprint, LogOut, User as UserIcon, Activity as ActivitySquare } from 'lucide-react';
+import { AmbientBackground } from './components/UI/UIComponents';
 import Landing from './pages/index';
 import TestPage from './pages/test';
+import DashboardHub from './pages/DashboardHub';
+import Intro from './pages/Intro';
+import LoginPage from './pages/LoginPage';
 import { Dashboard, AnalyzingScreen } from './components/Dashboard';
+import { analyzeResults } from './lib/api';
 
 export default function App() {
-  const [stage, setStage] = useState('landing'); // landing, test, analyzing, results
-  const [testResults, setTestResults] = useState({ motor: 650, facial: 800 });
+  const [stage, setStage] = useState('intro'); // intro, login, hub, test, analyzing, results
+  const [user, setUser] = useState(null); 
+  const [testResults, setTestResults] = useState(null);
+  const [isDataReady, setIsDataReady] = useState(false);
 
-  const handleAllTestsComplete = (results) => {
-    setTestResults(results);
+  const handleAllTestsComplete = async (results) => {
+    console.log("All tests complete. Received:", results);
     setStage('analyzing');
+    setIsDataReady(false);
+    
+    try {
+      // Call backend with ALL accumulated data
+      const detailedRisks = await analyzeResults(
+        results.motor, 
+        results.facial, 
+        user?.user_id,
+        results // Pass full results object for extra biomarkers
+      );
+      
+      setTestResults({ ...results, detailedRisks });
+    } catch (err) {
+      console.error("Backend analysis failed, using local fallback", err);
+      setTestResults({ ...results, detailedRisks: null });
+    } finally {
+      setIsDataReady(true);
+    }
   };
 
+  const handleLoginSuccess = (userData) => {
+    setUser(userData);
+    setStage('hub');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setStage('intro');
+  };
+
+  const showHeader = ['hub', 'test', 'analyzing', 'results'].includes(stage);
+
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-200 font-sans selection:bg-cyan-500/30 relative flex flex-col overflow-x-hidden">
-      <CustomCursor />
-      <AmbientBackground isTestActive={stage === 'test'} />
+    <div className="min-h-screen bg-[#FDFBF7] text-slate-800 font-sans selection:bg-teal-500/30 relative flex flex-col overflow-x-hidden">
+      {stage === 'intro' ? (
+        <div className="fixed inset-0 bg-[#f0fdf4] -z-10" />
+      ) : (
+        <AmbientBackground isTestActive={stage === 'test'} />
+      )}
 
-      <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center mix-blend-screen">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setStage('landing')}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-violet-500 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] relative">
-            <div className="absolute inset-0.5 bg-[#030712] rounded-[10px]" />
-            <Fingerprint className="text-cyan-400 relative z-10 w-6 h-6" />
+      {showHeader && (
+        <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center bg-white/40 backdrop-blur-md border-b border-[#F1E9DB]">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setStage('hub')}>
+            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-medical border border-[#F1E9DB] relative group transition-all hover:shadow-medical-lg">
+              <Fingerprint className="text-teal-700 w-7 h-7 transition-transform group-hover:scale-110" />
+            </div>
+            <div>
+              <h1 className="font-bold text-2xl tracking-tight text-slate-900">NeuroDect</h1>
+              <p className="text-[10px] font-bold text-teal-700 tracking-widest uppercase">Clinical AI Protocol</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-black text-xl tracking-widest text-white uppercase">NeuroDect</h1>
-            <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase">By DiNeuro</p>
-          </div>
-        </div>
-      </header>
+          
+          <nav className="hidden md:flex items-center gap-8">
+            {user && user.name && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-teal-50 rounded-xl border border-teal-100">
+                <UserIcon size={14} className="text-teal-600" />
+                <span className="text-xs font-bold text-teal-800">Dr. {user.name.split(' ')[0]}</span>
+              </div>
+            )}
+            <button className={`text-sm font-bold transition-colors ${stage === 'hub' ? 'text-teal-700' : 'text-slate-500 hover:text-teal-700'}`} onClick={() => setStage('hub')}>Hub</button>
+            <div className="h-4 w-[1px] bg-[#F1E9DB]" />
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all"
+            >
+              <LogOut size={16} />
+              Exit Portal
+            </button>
+          </nav>
+        </header>
+      )}
 
-      <main className="relative z-10 flex-grow flex items-center justify-center p-6">
+      <main className={`relative z-10 flex-grow flex items-center justify-center ${stage === 'intro' ? '' : 'p-6'}`}>
         <AnimatePresence mode="wait">
-          {stage === 'landing' && <Landing key="landing" onStart={() => setStage('test')} />}
-          {stage === 'test' && <TestPage key="test" onCompleteAll={handleAllTestsComplete} />}
-          {stage === 'analyzing' && <AnalyzingScreen key="analyzing" onComplete={() => setStage('results')} />}
-          {stage === 'results' && <Dashboard key="results" results={testResults} />}
+          {stage === 'intro' && (
+            <Intro key="intro" onEnter={() => setStage('login')} onViewDashboard={() => setStage('login')} />
+          )}
+          
+          {stage === 'login' && (
+            <LoginPage key="login" onLoginSuccess={handleLoginSuccess} />
+          )}
+
+          {stage === 'hub' && (
+            <DashboardHub key="hub" onStartTest={() => setStage('test')} />
+          )}
+
+          {stage === 'test' && (
+            <TestPage key="test" onCompleteAll={handleAllTestsComplete} />
+          )}
+
+          {stage === 'analyzing' && (
+            <AnalyzingScreen 
+              key="analyzing" 
+              isDataReady={isDataReady}
+              onComplete={() => setStage('results')} 
+            />
+          )}
+
+          {stage === 'results' && (
+            <div className="flex flex-col items-center gap-10 w-full max-w-6xl">
+              <Dashboard results={testResults} />
+              <div className="flex flex-wrap justify-center gap-6">
+                <button 
+                  onClick={() => setStage('test')}
+                  className="px-10 py-5 bg-white text-teal-700 border-2 border-teal-100 rounded-2xl font-bold shadow-medical hover:bg-teal-50 transition-all active:scale-95 text-lg flex items-center gap-3"
+                >
+                  <ActivitySquare size={24} />
+                  Re-run Screening
+                </button>
+                <button 
+                  onClick={() => setStage('hub')}
+                  className="px-10 py-5 bg-teal-700 text-white rounded-2xl font-bold shadow-medical-xl hover:bg-teal-800 transition-all active:scale-95 text-lg"
+                >
+                  Return to Protocol Hub
+                </button>
+              </div>
+            </div>
+          )}
         </AnimatePresence>
       </main>
 
-      <div className="fixed bottom-6 w-full text-center pointer-events-none z-0 opacity-40">
-        <p className="font-mono text-[10px] tracking-[0.3em] uppercase text-cyan-500/50">GDG Open Innovation Domain • AI Healthcare</p>
-      </div>
+      <footer className="relative z-20 w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-[#F1E9DB] bg-white/20">
+        <p className="font-bold text-[10px] tracking-wider uppercase text-slate-400">GDG Open Innovation • AI Healthcare Division</p>
+        <div className="flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <span>Privacy Protocol</span>
+          <span>HIPAA Compliant</span>
+          <span>v1.0.4-PRO</span>
+        </div>
+      </footer>
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes gradient-x {
