@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ScanFace, Ear, Hand, Brain, CheckCircle2, ChevronRight, ActivitySquare } from 'lucide-react';
 import { GlassContainer } from '../components/UI/UIComponents';
 import { FaceMesh, HandTracker } from '../components/TestModules';
-import NeuralReflexTest from '../../NeuralReflexTest';
+import NeuralReflexTest from '../components/NeuralReflexTest';
 
 const AudioTest = ({ onComplete }) => (
   <div className="flex flex-col items-center justify-center h-[600px]">

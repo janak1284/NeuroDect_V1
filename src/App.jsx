@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Fingerprint } from 'lucide-react';
-import { CustomCursor, AmbientBackground } from './src/components/UI/UIComponents';
-import Landing from './src/pages/index';
-import TestPage from './src/pages/test';
-import { Dashboard, AnalyzingScreen } from './src/components/Dashboard';
+import { CustomCursor, AmbientBackground } from './components/UI/UIComponents';
+import Landing from './pages/index';
+import TestPage from './pages/test';
+import { Dashboard, AnalyzingScreen } from './components/Dashboard';
 
 export default function App() {
   const [stage, setStage] = useState('landing'); // landing, test, analyzing, results

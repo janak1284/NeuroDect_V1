@@ -1,5 +1,5 @@
 import React from 'react';
-import App from './MODERN_APP';
+import App from './App';
 
 function Root() {
   return (
