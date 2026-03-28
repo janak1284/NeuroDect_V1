@@ -22,6 +22,26 @@ export const calculateRisks = (results) => {
 };
 
 /**
+ * Fetches historical screening results for a specific user.
+ */
+export const getHistory = async (user_id) => {
+  if (!user_id) return [];
+  try {
+    const response = await fetch(`http://localhost:8000/history/${user_id}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch history');
+    
+    return await response.json();
+  } catch (err) {
+    console.error("API History Error:", err);
+    return [];
+  }
+};
+
+/**
  * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
  */
 export const analyzeResults = async (motor_ms, facial_ms, user_id = null, extraData = {}) => {

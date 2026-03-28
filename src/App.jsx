@@ -102,7 +102,7 @@ export default function App() {
           )}
 
           {stage === 'hub' && (
-            <DashboardHub key="hub" onStartTest={() => setStage('test')} />
+            <DashboardHub key="hub" onStartTest={() => setStage('test')} user={user} />
           )}
 
           {stage === 'test' && (
