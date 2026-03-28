@@ -97,14 +97,17 @@ const Intro = ({ onEnter, onViewDashboard }) => {
       </div>
 
       <footer className="absolute bottom-10 w-full px-12 flex justify-between items-center opacity-40">
-        <div className="flex gap-8">
-          <div className="flex items-center gap-2">
-            <Microscope size={16} className="text-emerald-600" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-900">Clinical Research v1.0</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={16} className="text-emerald-600" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-900">HIPAA Protected</span>
+        <div className="flex items-center gap-12">
+          <span className="text-[14px] font-black text-slate-900 tracking-[0.4em]">DINEURO</span>
+          <div className="flex gap-8">
+            <div className="flex items-center gap-2">
+              <Microscope size={16} className="text-emerald-600" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-900">Clinical Research v1.0</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={16} className="text-emerald-600" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-900">HIPAA Protected</span>
+            </div>
           </div>
         </div>
         <p className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">GDG Innovation Division</p>

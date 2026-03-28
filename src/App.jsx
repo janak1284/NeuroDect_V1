@@ -83,6 +83,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#E3DFD6] text-slate-800 font-sans selection:bg-teal-500/30 relative flex flex-col overflow-x-hidden">
+      {/* Global Team Branding */}
+      <div className="fixed top-8 left-8 z-[100] pointer-events-none hidden lg:flex flex-col">
+        <span className="text-[14px] font-black text-teal-800 tracking-[0.4em]">DINEURO</span>
+        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Innovation Team</span>
+      </div>
+
       {stage === 'intro' ? (
         <div className="fixed inset-0 bg-[#f0fdf4] -z-10" />
       ) : (
@@ -91,13 +97,19 @@ export default function App() {
 
       {showHeader && (
         <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center bg-white/40 backdrop-blur-md header-container">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setStage('hub')}>
-            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-medical border border-[#F1E9DB] relative group transition-all hover:shadow-medical-lg">
-              <Fingerprint className="text-teal-700 w-7 h-7 transition-transform group-hover:scale-110" />
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col border-r border-teal-100 pr-6 mr-2">
+              <span className="text-[14px] font-black text-teal-800 tracking-[0.4em]">DINEURO</span>
+              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Innovation Team</span>
             </div>
-            <div>
-              <h1 className="font-bold text-2xl tracking-tight text-slate-900">NeuroDect</h1>
-              <p className="text-[10px] font-bold text-teal-700 tracking-widest uppercase">Clinical AI Protocol</p>
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setStage('hub')}>
+              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-medical border border-[#F1E9DB] relative group transition-all hover:shadow-medical-lg">
+                <Fingerprint className="text-teal-700 w-7 h-7 transition-transform group-hover:scale-110" />
+              </div>
+              <div>
+                <h1 className="font-bold text-2xl tracking-tight text-slate-900">NeuroDect</h1>
+                <p className="text-[10px] font-bold text-teal-700 tracking-widest uppercase">Clinical AI Protocol</p>
+              </div>
             </div>
           </div>
           
