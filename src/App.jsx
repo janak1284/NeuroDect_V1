@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Fingerprint } from 'lucide-react';
+import { Fingerprint, LogOut, User } from 'lucide-react';
 import { CustomCursor, AmbientBackground } from './components/UI/UIComponents';
 import Landing from './pages/index';
 import TestPage from './pages/test';
 import { Dashboard, AnalyzingScreen } from './components/Dashboard';
 
-export default function App() {
+export default function App({ user, onLogout }) {
   const [stage, setStage] = useState('landing'); // landing, test, analyzing, results
   const [testResults, setTestResults] = useState({ motor: 650, facial: 800 });
 
@@ -31,14 +31,31 @@ export default function App() {
             <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase">By DiNeuro</p>
           </div>
         </div>
+
+        <div className="flex items-center gap-6">
+          <div className="hidden sm:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/10 backdrop-blur-md">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500/20 to-violet-500/20 flex items-center justify-center border border-cyan-500/30">
+              <User className="w-4 h-4 text-cyan-400" />
+            </div>
+            <span className="text-xs font-mono text-gray-300 max-w-[150px] truncate">{user?.email}</span>
+          </div>
+          
+          <button 
+            onClick={onLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all text-xs font-mono uppercase tracking-widest"
+          >
+            <LogOut size={14} />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
+        </div>
       </header>
 
       <main className="relative z-10 flex-grow flex items-center justify-center p-6">
         <AnimatePresence mode="wait">
           {stage === 'landing' && <Landing key="landing" onStart={() => setStage('test')} />}
-          {stage === 'test' && <TestPage key="test" onCompleteAll={handleAllTestsComplete} />}
+          {stage === 'test' && <TestPage key="test" user={user} onCompleteAll={handleAllTestsComplete} />}
           {stage === 'analyzing' && <AnalyzingScreen key="analyzing" onComplete={() => setStage('results')} />}
-          {stage === 'results' && <Dashboard key="results" results={testResults} />}
+          {stage === 'results' && <Dashboard key="results" results={testResults} user={user} />}
         </AnimatePresence>
       </main>
 

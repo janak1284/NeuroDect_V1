@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShieldAlert, AlertTriangle, Terminal, Activity, ScanFace, ChevronRight, ActivitySquare } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, Terminal, Activity, ScanFace, ChevronRight, ActivitySquare, User } from 'lucide-react';
 import { GlassContainer } from './UI/UIComponents';
 import { calculateRisks } from '../lib/api';
 
@@ -36,7 +36,7 @@ export const AnalyzingScreen = ({ onComplete }) => {
   );
 };
 
-export const Dashboard = ({ results }) => {
+export const Dashboard = ({ results, user }) => {
   const riskScores = calculateRisks(results);
   const mainRisk = riskScores.reduce((prev, current) => (prev.value > current.value) ? prev : current);
 
@@ -83,6 +83,17 @@ export const Dashboard = ({ results }) => {
           <ShieldAlert className="w-8 h-8 text-rose-400" />
           <h2 className="text-2xl font-black text-white uppercase tracking-widest">Risk Summary</h2>
         </div>
+        
+        <div className="mb-8 flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+          <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
+            <User className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-tighter">Patient Profile</div>
+            <div className="text-sm font-medium text-slate-200">{user?.email}</div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-8 mb-10">
           {riskScores.map((risk, idx) => (
             <CircularProgress key={idx} value={risk.value} label={risk.label} color={risk.color} />

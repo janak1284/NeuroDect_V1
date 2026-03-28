@@ -1,3 +1,5 @@
+const API_URL = 'http://localhost:8000';
+
 /**
  * Core risk calculation logic.
  * Synchronized with backend thresholds for consistent home-use diagnostics.
@@ -22,20 +24,101 @@ export const calculateRisks = (results) => {
 };
 
 /**
+ * Auth Helper: Get stored token
+ */
+export const getToken = () => localStorage.getItem('neurodect_token');
+
+/**
+ * Auth Helper: Set stored token
+ */
+export const setToken = (token) => localStorage.setItem('neurodect_token', token);
+
+/**
+ * Auth Helper: Remove stored token
+ */
+export const removeToken = () => localStorage.removeItem('neurodect_token');
+
+/**
+ * Auth Helper: Get Headers with Auth
+ */
+const getHeaders = (isMultipart = false) => {
+  const headers = {};
+  if (!isMultipart) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
+/**
+ * Auth API: Register
+ */
+export const register = async (email, password) => {
+  const response = await fetch(`${API_URL}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Registration failed');
+  }
+  return response.json();
+};
+
+/**
+ * Auth API: Login
+ */
+export const login = async (email, password) => {
+  const formData = new FormData();
+  formData.append('username', email);
+  formData.append('password', password);
+
+  const response = await fetch(`${API_URL}/login`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Login failed');
+  }
+  const data = await response.json();
+  setToken(data.access_token);
+  return data;
+};
+
+/**
+ * Auth API: Get current user
+ */
+export const getMe = async () => {
+  const response = await fetch(`${API_URL}/me`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    removeToken();
+    throw new Error('Session expired');
+  }
+  return response.json();
+};
+
+/**
  * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
  */
 export const analyzeResults = async (motor_ms, facial_ms, user_id = null) => {
   try {
-    const response = await fetch('http://localhost:8000/analyze_reaction', {
+    const response = await fetch(`${API_URL}/analyze_reaction`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ 
         user_id, 
         motor_ms, 
         facial_ms,
-        asymmetry_index: 0.0, // Should be passed from FaceTest results in a full implementation
-        tremor_hz: 0.0,        // Should be passed from MotorTest results
-        voice_jitter: 0.0      // Should be passed from AudioTest results
+        asymmetry_index: 0.0, 
+        tremor_hz: 0.0,        
+        voice_jitter: 0.0      
       }),
     });
     return await response.json();

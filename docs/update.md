@@ -18,37 +18,14 @@ The following table describes the dependence of each disease risk on the measure
 | **Bell's Palsy** | Facial RT | 300 | Critical (Direct CN VII nerve response) |
 | **ALS** | Motor RT | 250 | Moderate (Motor neuron degradation) |
 
-### 3. Tech Stack & Detection Logic
-- **Frontend:** React + MediaPipe Face Mesh.
-- **Smile Logic:** Uses the ratio of **Mouth Width / Inter-Eye Distance** (scale-invariant).
-- **Backend:** FastAPI (Python) for risk aggregation and diagnostic insight generation.
-
 ---
 
 ## 🏗️ Suggested FastAPI Backend Structure
-Since the backend structure is not yet fully defined, the following is a recommended architecture for NeuroDect:
-
-```
-backend/
-├── main.py                 # FastAPI Entry Point & App Init
-├── requirements.txt        # Backend dependencies
-├── api/                    # API Route Handlers
-│   ├── reaction.py         # Neural Reflex endpoints
-│   ├── audio.py            # Voice analysis endpoints
-│   └── tremor.py           # Hand stability endpoints
-├── core/                   # Shared configurations & middleware
-│   └── config.py
-├── schemas/                # Pydantic models for validation
-│   └── reaction_schema.py
-├── services/               # Diagnostic & Risk Logic (The "Brain")
-│   ├── risk_engine.py      # Aggregates scores across tests
-│   └── signal_processor.py # FFT, MFCC extraction, etc.
-└── tests/                  # Backend unit & integration tests
-```
+(Archived as of March 28 Auth Update)
 
 ---
 
-## 🚀 Performance & UI Optimization (Latest)
+## 🚀 Performance & UI Optimization
 **Timestamp:** 2026-03-28 22:45:00
 
 ### 1. UI & Flow Enhancements
@@ -56,10 +33,33 @@ backend/
 - **Test Sequence Pause:** Implemented a transition screen after the final test to allow users to pause before generating the report.
 
 ### 2. Hybrid "Zero-Lag" Architecture
-- **Throttled Frontend Feed:** Enforced `640x480 @ 15fps` camera constraints using native `getUserMedia`. This prevents CPU/network congestion caused by high-resolution/high-fps video.
-- **Client-Side Heavy Lifting:** All MediaPipe landmark detection now runs exclusively in the user's browser. Only lightweight JSON results (latency numbers) are sent to the FastAPI backend.
-- **Non-Blocking Frame Dropping:** Replaced the sequential processing loop with a `requestAnimationFrame` handler that drops stale frames if the previous frame hasn't finished processing, ensuring a perfectly smooth UI overlay.
-- **Refined Scaling:** Re-synchronized frontend and backend risk scaling once performance was stabilized, ensuring accurate and dynamic risk percentages.
+- **Throttled Frontend Feed:** Enforced `640x480 @ 15fps` camera constraints using native `getUserMedia`. 
+- **Client-Side Heavy Lifting:** All MediaPipe landmark detection now runs exclusively in the user's browser.
+- **Non-Blocking Frame Dropping:** Replaced the sequential processing loop with a `requestAnimationFrame` handler.
 
 ---
-**Status:** Performance bottlenecks resolved; UI updated for better accessibility and flow.
+
+## 🔐 User Authentication & Persistence (Latest)
+**Timestamp:** 2026-03-28 15:20:00
+
+### 1. Secure JWT-Based Auth System
+- **Backend:** Implemented full authentication lifecycle in `main.py` using `FastAPI`, `OAuth2`, `python-jose` (JWT), and `passlib` (Bcrypt).
+- **Security:** Argon2/Bcrypt password hashing and JWT token expiration (24h).
+- **Endpoints:**
+    - `POST /register`: Creates new user with UUID.
+    - `POST /login`: Issues JWT tokens for valid credentials.
+    - `GET /me`: Returns profile of the authenticated user.
+- **Database:** Updated PostgreSQL `users` table to support `email` (unique) and `hashed_password`.
+
+### 2. Frontend Auth Flow
+- **Glassmorphism UI:** Created `src/components/Auth.jsx` featuring a high-aesthetic, animated login/register interface.
+- **Persistent Sessions:** Tokens are securely stored in `localStorage` and managed via `src/lib/api.js`.
+- **Protected Routing:** `src/Root.jsx` now acts as a gatekeeper, ensuring users are authenticated before accessing the diagnostic dashboard.
+- **Header Integration:** Added user profile display and a logout mechanism to the main navigation bar.
+
+### 3. Data Attribution
+- **Longitudinal Tracking:** Test results sent via `analyzeResults` are now linked to the authenticated `user_id`, enabling historical trend analysis and personalized health reports.
+- **Dashboard Profile:** The results dashboard now displays the patient's profile to ensure report authenticity.
+
+---
+**Status:** Authentication implemented; Data persistence linked to user profiles; Ready for longitudinal feature development.
