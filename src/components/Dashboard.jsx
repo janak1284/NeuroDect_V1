@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShieldAlert, AlertTriangle, Terminal, Activity, ScanFace, ChevronRight, ActivitySquare, Ear, Brain } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, Terminal, Activity, ScanFace, ChevronRight, ActivitySquare, Ear, Brain, MapPin, Navigation, Phone } from 'lucide-react';
 import { GlassContainer } from './UI/UIComponents';
 
 export const AnalyzingScreen = ({ onComplete, isDataReady }) => {
@@ -63,17 +63,23 @@ export const Dashboard = ({ results }) => {
 
   // Extract from database fields if present (returned from backend RETURNING *)
   // Otherwise fallback to raw capture fields
-  const facialVal = results.facial_score || results.facial || results.asymmetry_index || 95;
+  // IMPORTANT: DB stores 'asymmetry_index' (0.02) but we want to display 'score' (98%)
+  const facialVal = results.facial_score || results.facial || 
+                   (results.asymmetry_index !== undefined ? Math.round(100 - (results.asymmetry_index * 100)) : 95);
+
   const acousticVal = results.acoustic_ms || results.voice_jitter_pct || results.acoustic || 0.02;
+
   const motorVal = results.tremor_frequency_hz || results.tremor_hz || results.motor || 4.8;
-  const reflexVal = results.reflex_ms || results.reaction_time_ms || results.reflex || 250;
+
+  const reflexVal = results.reflex_score || 
+                   (results.reflex_ms ? Math.round(Math.max(0, Math.min(100, 100 - (results.reflex_ms - 200) / 8))) : 85);
 
   // Robustly extract biomarkers with fallbacks
   const tests = [
     { id: 'facial', label: 'Facial Asymmetry', icon: <ScanFace size={18} />, value: facialVal, baseline: 100, unit: '%' },
     { id: 'acoustic', label: 'Acoustic Cadence', icon: <Ear size={18} />, value: acousticVal, baseline: 0.015, unit: ' Jitter' },
     { id: 'motor', label: 'Motor Stability', icon: <Activity size={18} />, value: motorVal, baseline: 0, unit: 'Hz' },
-    { id: 'reflex', label: 'Neural Reflex', icon: <Brain size={18} />, value: reflexVal, baseline: 200, unit: 'ms' },
+    { id: 'reflex', label: 'Neural Reflex', icon: <Brain size={18} />, value: Math.round(reflexVal), baseline: 100, unit: '%' },
   ];
 
   const diseases = [
@@ -146,7 +152,8 @@ export const Dashboard = ({ results }) => {
 
   try {
     return (
-      <GlassContainer className="max-w-7xl w-full overflow-hidden border-[#F1E9DB] shadow-medical-xl flex flex-col">
+      <>
+        <GlassContainer className="max-w-7xl w-full overflow-hidden border-[#F1E9DB] shadow-medical-xl flex flex-col">
         <div className="p-8 border-b border-[#F1E9DB] bg-[#F9F6F0]/40 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-teal-700 flex items-center justify-center shadow-lg">
@@ -244,7 +251,9 @@ export const Dashboard = ({ results }) => {
           </div>
         </div>
       </GlassContainer>
-    );
+      <HospitalFinder />
+    </>
+  );
   } catch (err) {
     console.error("Dashboard Rendering Error:", err);
     return (
