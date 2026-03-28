@@ -19,6 +19,22 @@ export default function App() {
   const [showHospitalModal, setShowHospitalModal] = useState(false);
 
   // Persistence: Check for existing session
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const userData = await getMe();
+        if (userData) {
+          setUser(userData);
+          setStage('hub');
+        }
+      } catch (err) {
+        console.error("Session initialization failed", err);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    initSession();
+  }, []);
 
   const handleAllTestsComplete = async (results) => {
     console.log("CRITICAL: All tests complete. Data package received:", results);
