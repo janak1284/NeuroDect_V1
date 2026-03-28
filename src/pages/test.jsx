@@ -4,6 +4,7 @@ import { ScanFace, Ear, Hand, Brain, CheckCircle2, ChevronRight, ActivitySquare 
 import { GlassContainer } from '../components/UI/UIComponents';
 import { FaceMesh, HandTracker } from '../components/TestModules';
 import NeuralReflexTest from '../components/NeuralReflexTest';
+import { analyzeResults } from '../lib/api';
 
 const AudioTest = ({ onComplete }) => (
   <div className="flex flex-col items-center justify-center h-[600px]">
@@ -12,7 +13,7 @@ const AudioTest = ({ onComplete }) => (
   </div>
 );
 
-const TestPage = ({ onCompleteAll }) => {
+const TestPage = ({ user, onCompleteAll }) => {
   const [currentTest, setCurrentTest] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [results, setResults] = useState({ motor: 650, facial: 800 });
@@ -31,11 +32,17 @@ const TestPage = ({ onCompleteAll }) => {
     setIsTransitioning(true);
   };
 
-  const proceedToNext = () => {
+  const proceedToNext = async () => {
     if (currentTest < tests.length - 1) {
       setCurrentTest(prev => prev + 1);
       setIsTransitioning(false);
     } else {
+      // Final test complete, sync with backend
+      try {
+        await analyzeResults(results.motor, results.facial, user?.user_id);
+      } catch (err) {
+        console.error("Failed to sync results:", err);
+      }
       onCompleteAll(results);
     }
   };
