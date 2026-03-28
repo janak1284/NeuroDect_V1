@@ -1,12 +1,12 @@
 import React from 'react';
-import DEMO1 from './DEMO1';
+import App from './MODERN_APP';
 
-function App() {
+function Root() {
   return (
     <div className="App">
-      <DEMO1 />
+      <App />
     </div>
   );
 }
 
-export default App;
+export default Root;

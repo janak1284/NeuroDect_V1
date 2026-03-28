@@ -26,5 +26,18 @@ To prevent false positives caused by hardware/browser latency, the risk assessme
 - **Dynamic Risk Scaling:** Adjusted the Sigmoid models in the backend to ensure a 400ms reaction time is classified as "Low Risk" (~15-25%), only flagging high risks when latencies exceed 700-850ms.
 - **Dashboard Synchronization:** Updated the frontend Results Dashboard to reflect these new baselines, providing consistent feedback between the live test and the final report.
 
+## 💾 Neon DB Integration & ALS Pivot
+- **Persistence Layer:** Integrated Neon (PostgreSQL) with `asyncpg`. Automatically synchronizes user identity and persists raw biomarkers + computed risks.
+- **ALS Risk Assessment:** Pivoted from cognitive decline to ALS, focusing on Bulbar onset (Speech/Jitter) and Neuromotor execution (Latency).
+- **Longitudinal Readiness:** Schemas designed to support 5-test moving averages and trend analysis for progressive neurological conditions.
+
+## 🏗️ Frontend Architecture Modularization
+- **Modular Refactoring:** Decomposed the monolithic `DEMO1.js` into a clean, reusable structure:
+    - `src/components/UI/`: Base design primitives (GlassContainer, AmbientBackground).
+    - `src/components/`: Core features (Dashboard, TestModules).
+    - `src/pages/`: View-level orchestration (Landing, TestPage).
+    - `src/lib/`: Unified API client and risk calculation logic.
+- **Maintainability:** Improved code readability and separated concerns, allowing for independent scaling of test modules and UI components.
+
 ---
-**Status:** Latency discrepancy resolved and risk assessment calibrated for real-world accuracy.
+**Status:** Performance stabilized, DB integrated, and architecture modernized for future expansion.
