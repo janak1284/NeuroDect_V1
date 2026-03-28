@@ -47,4 +47,19 @@ backend/
 ```
 
 ---
-**Status:** Implementation strategy finalized and initial backend created at `backend/main.py`.
+
+## 🚀 Performance & UI Optimization (Latest)
+**Timestamp:** 2026-03-28 22:45:00
+
+### 1. UI & Flow Enhancements
+- **Increased Frame Size:** Expanded test container to `max-w-5xl` with a `700px` minimum height for better visibility.
+- **Test Sequence Pause:** Implemented a transition screen after the final test to allow users to pause before generating the report.
+
+### 2. Hybrid "Zero-Lag" Architecture
+- **Throttled Frontend Feed:** Enforced `640x480 @ 15fps` camera constraints using native `getUserMedia`. This prevents CPU/network congestion caused by high-resolution/high-fps video.
+- **Client-Side Heavy Lifting:** All MediaPipe landmark detection now runs exclusively in the user's browser. Only lightweight JSON results (latency numbers) are sent to the FastAPI backend.
+- **Non-Blocking Frame Dropping:** Replaced the sequential processing loop with a `requestAnimationFrame` handler that drops stale frames if the previous frame hasn't finished processing, ensuring a perfectly smooth UI overlay.
+- **Refined Scaling:** Re-synchronized frontend and backend risk scaling once performance was stabilized, ensuring accurate and dynamic risk percentages.
+
+---
+**Status:** Performance bottlenecks resolved; UI updated for better accessibility and flow.
