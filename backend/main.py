@@ -293,13 +293,16 @@ def normalize(value: float, mean: float, std: float) -> float:
 # MAIN ANALYSIS ENDPOINT
 # =========================
 
-@app.post("/analyze_reaction", response_model=List[RiskResult])
+@app.post("/analyze_reaction")
 async def analyze_reaction(data: ReactionData, current_user: dict = Depends(get_current_user)):
     motor = data.motor_ms
     facial = data.facial_ms
     asymmetry = data.asymmetry_index
     tremor = data.tremor_hz
     jitter = data.voice_jitter
+    h_shift = data.h_shift
+    v_shift = data.v_shift
+    expansion = data.expansion
 
     MOTOR_BASELINE = 450  
     FACIAL_BASELINE = 500
@@ -313,35 +316,44 @@ async def analyze_reaction(data: ReactionData, current_user: dict = Depends(get_
     stroke_score = sigmoid(1.0 * motor_z + 1.5 * facial_z + 3.0 * asymmetry - 2.8)
     et_score = sigmoid(2.5 * (1.0 if 4 <= tremor <= 10 else 0.1) - 2.2)
     als_score = sigmoid(1.4 * motor_z + 2.5 * jitter - 2.6)
+    bells_palsy_score = sigmoid(2.5 * asymmetry + 1.5 * (h_shift + v_shift) - 2.0)
 
     risks = [
         {"disease": "Parkinson's Disease", "risk_percentage": round(parkinson_score * 100, 1), "dependence_level": "High", "insight": f"Motor patterns (z={motor_z:.2f}) + tremor analysis ({tremor}Hz)"},
         {"disease": "Acute Stroke", "risk_percentage": round(stroke_score * 100, 1), "dependence_level": "High", "insight": f"Facial symmetry ({asymmetry:.2f}) + motor latency (z={motor_z:.2f})"},
         {"disease": "Essential Tremor", "risk_percentage": round(et_score * 100, 1), "dependence_level": "Moderate", "insight": f"Frequency analysis peaking at {tremor}Hz"},
-        {"disease": "ALS", "risk_percentage": round(als_score * 100, 1), "dependence_level": "Moderate", "insight": f"Neuromotor delay (z={motor_z:.2f}) + speech jitter proxy ({jitter:.2f})"}
+        {"disease": "ALS", "risk_percentage": round(als_score * 100, 1), "dependence_level": "Moderate", "insight": f"Neuromotor delay (z={motor_z:.2f}) + speech jitter proxy ({jitter:.2f})"},
+        {"disease": "Bell's Palsy", "risk_percentage": round(bells_palsy_score * 100, 1), "dependence_level": "High", "insight": f"Micro-asymmetries ({asymmetry:.2f}) + muscular shifts"}
     ]
 
     db_pool = await get_pool()
+    result_record = {"risks": risks}
+    
     if db_pool:
         try:
-            overall = sum(r["risk_percentage"] for r in risks) / 4.0
+            overall = sum(r["risk_percentage"] for r in risks) / 5.0
             async with db_pool.acquire() as conn:
-                await conn.execute('''
+                row = await conn.fetchrow('''
                     INSERT INTO screening_results (
                         user_id, asymmetry_index, tremor_frequency_hz, voice_jitter_pct, reaction_time_ms,
                         facial_ms, gesture_latency,
                         stroke_risk_pct, parkinsons_risk_pct, essential_tremor_risk_pct, als_risk_pct,
-                        overall_risk_score
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                        overall_risk_score, h_shift, v_shift, expansion, bells_palsy_risk_pct
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                    RETURNING *
                 ''', 
                 uuid.UUID(current_user['user_id']), asymmetry, tremor, jitter, motor,
-                facial, facial, # gesture_latency uses facial_ms value
+                facial, facial,
                 stroke_score * 100, parkinson_score * 100, et_score * 100, als_score * 100,
-                overall)
+                overall, h_shift, v_shift, expansion, bells_palsy_score * 100)
+                
+                if row:
+                    result_record = dict(row)
+                    result_record["risks"] = risks # Keep the detailed risks format
         except Exception as e:
             print(f"Database insertion error: {e}")
 
-    return risks
+    return result_record
 
 if __name__ == "__main__":
     import uvicorn

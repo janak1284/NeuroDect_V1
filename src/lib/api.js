@@ -115,7 +115,10 @@ export const analyzeResults = async (motor_ms, facial_ms, extraData = {}) => {
       facial_ms: parseFloat(facial_ms) || 500,
       asymmetry_index: parseFloat(extraData.asymmetry) || 0.0,
       tremor_hz: parseFloat(extraData.tremor_hz) || 0.0,
-      voice_jitter: parseFloat(extraData.acoustic) || 0.0
+      voice_jitter: parseFloat(extraData.acoustic) || 0.0,
+      h_shift: parseFloat(extraData.h_shift) || 0.0,
+      v_shift: parseFloat(extraData.v_shift) || 0.0,
+      expansion: parseFloat(extraData.expansion) || 0.0
     };
 
     const response = await fetch(`${API_URL}/analyze_reaction`, {

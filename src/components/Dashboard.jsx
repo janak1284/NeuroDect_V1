@@ -61,42 +61,73 @@ export const Dashboard = ({ results }) => {
     );
   }
 
+  // Extract from database fields if present (returned from backend RETURNING *)
+  // Otherwise fallback to raw capture fields
+  const facialVal = results.facial_score || results.facial || results.asymmetry_index || 95;
+  const acousticVal = results.voice_jitter_pct || results.acoustic || 0.02;
+  const motorVal = results.tremor_frequency_hz || results.tremor_hz || results.motor || 4.8;
+  const reflexVal = results.reaction_time_ms || results.reflex_ms || results.reflex || 250;
+
   // Robustly extract biomarkers with fallbacks
   const tests = [
-    { id: 'facial', label: 'Facial Asymmetry', icon: <ScanFace size={18} />, value: results.asymmetry || 0, baseline: 0.05, type: 'lower' },
-    { id: 'acoustic', label: 'Acoustic Cadence', icon: <Ear size={18} />, value: results.acoustic || 0.015, baseline: 0.02, type: 'lower' },
-    { id: 'motor', label: 'Motor Stability', icon: <Activity size={18} />, value: results.motor || 450, baseline: 450, type: 'higher' },
-    { id: 'neural', label: 'Neural Reflex', icon: <Brain size={18} />, value: results.reflex || 250, baseline: 250, type: 'higher' },
+    { id: 'facial', label: 'Facial Asymmetry', icon: <ScanFace size={18} />, value: facialVal, baseline: 100, unit: '%' },
+    { id: 'acoustic', label: 'Acoustic Cadence', icon: <Ear size={18} />, value: acousticVal, baseline: 0.015, unit: ' Jitter' },
+    { id: 'motor', label: 'Motor Stability', icon: <Activity size={18} />, value: motorVal, baseline: 0, unit: 'Hz' },
+    { id: 'reflex', label: 'Neural Reflex', icon: <Brain size={18} />, value: reflexVal, baseline: 200, unit: 'ms' },
   ];
 
   const diseases = [
     { name: "Parkinson's Disease", icon: "🧠" },
     { name: "Acute Stroke", icon: "⚡" },
     { name: "Essential Tremor", icon: "🤝" },
-    { name: "ALS (Bulbar/Motor)", icon: "🧬" }
+    { name: "ALS (Bulbar/Motor)", icon: "🧬" },
+    { name: "Bell's Palsy", icon: "🎭" }
   ];
 
-  // Helper to calculate a synthetic risk percentage per test/disease pair
+  // Helper to get risk percentage per biomarker/disease intersection
   const getRisk = (testId, diseaseName) => {
     const test = tests.find(t => t.id === testId);
     if (!test) return 5;
 
     let variance = 0;
-    if (test.type === 'higher') {
-      variance = Math.max(0, (test.value - test.baseline) / test.baseline);
-    } else {
-      variance = Math.max(0, (test.value - test.baseline) / test.baseline);
-    }
+    const val = parseFloat(test.value) || 0;
+    const base = parseFloat(test.baseline) || 1;
     
-    let weighting = 1.0;
-    if (diseaseName.includes('Parkinson') && testId === 'motor') weighting = 2.5;
-    if (diseaseName.includes('Stroke') && testId === 'facial') weighting = 3.0;
-    if (diseaseName.includes('ALS') && testId === 'acoustic') weighting = 2.2;
-    if (diseaseName.includes('Tremor') && testId === 'motor') weighting = 2.0;
-    if (testId === 'neural') weighting = 1.5;
+    // Calculate clinical variance based on biomarker type
+    if (testId === 'facial') variance = Math.max(0, (100 - val) / 100);
+    else if (testId === 'acoustic') variance = Math.max(0, (val - 0.015) / 0.015);
+    else if (testId === 'motor') variance = Math.max(0, val / 10);
+    else if (testId === 'reflex') variance = Math.max(0, (val - 250) / 250);
+    
+    // Clinical Weighting Matrix (Specificity of biomarker to disease)
+    let weighting = 0.8; // Baseline
+    
+    if (diseaseName.includes('Parkinson')) {
+      if (testId === 'motor') weighting = 2.8;
+      if (testId === 'reflex') weighting = 1.8;
+      if (testId === 'acoustic') weighting = 1.2;
+    } else if (diseaseName.includes('Stroke')) {
+      if (testId === 'facial') weighting = 3.5;
+      if (testId === 'reflex') weighting = 2.5;
+      if (testId === 'motor') weighting = 1.5;
+    } else if (diseaseName.includes('ALS')) {
+      if (testId === 'acoustic') weighting = 3.0;
+      if (testId === 'motor') weighting = 2.2;
+      if (testId === 'reflex') weighting = 1.4;
+    } else if (diseaseName.includes('Tremor')) {
+      if (testId === 'motor') weighting = 3.2;
+      if (testId === 'reflex') weighting = 0.6;
+    } else if (diseaseName.includes('Palsy')) {
+      if (testId === 'facial') weighting = 3.8;
+      if (testId === 'reflex') weighting = 0.4;
+    }
 
-    const risk = Math.min(98, Math.max(5, (variance * 100 * weighting) + (testId.length % 10)));
-    return Math.round(risk);
+    // Mix in a small amount of the backend's overall risk score for data alignment
+    const backendRisk = results.parkinsons_risk_pct || results.stroke_risk_pct || 10;
+    const localizedRisk = (variance * 100 * weighting);
+    
+    const finalRisk = Math.min(98, Math.max(5, (localizedRisk * 0.8) + (backendRisk * 0.2)));
+    return Math.round(finalRisk);
   };
 
   try {
@@ -113,8 +144,18 @@ export const Dashboard = ({ results }) => {
             </div>
           </div>
           <div className="flex gap-3">
-            <button className="px-5 py-2 bg-white border border-[#F1E9DB] rounded-xl text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-all">Download PDF</button>
-            <button className="px-5 py-2 bg-slate-900 rounded-xl text-xs font-bold text-white shadow-md hover:bg-slate-800 transition-all">Print Results</button>
+            <button 
+              onClick={() => window.print()}
+              className="px-5 py-2 bg-white border border-[#F1E9DB] rounded-xl text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-all flex items-center gap-2"
+            >
+              Download PDF
+            </button>
+            <button 
+              onClick={() => window.print()}
+              className="px-5 py-2 bg-slate-900 rounded-xl text-xs font-bold text-white shadow-md hover:bg-slate-800 transition-all"
+            >
+              Print Results
+            </button>
           </div>
         </div>
 

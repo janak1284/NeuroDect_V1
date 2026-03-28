@@ -39,7 +39,7 @@ export const CustomCursor = () => {
 };
 
 export const AmbientBackground = ({ isTestActive }) => (
-  <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-[#FDFBF7]">
+  <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-[#E3DFD6]">
     <div className="absolute inset-0 opacity-[0.25] mix-blend-soft-light" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>
     
     {!isTestActive && (
@@ -71,7 +71,7 @@ export const GlassContainer = ({ children, className = "", isTestActive = false 
     animate={{ opacity: 1, y: 0, scale: 1 }}
     exit={{ opacity: 0, y: -15, scale: 0.99 }}
     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-    className={`bg-white/85 backdrop-blur-2xl border border-[#F1E9DB] rounded-[2.5rem] shadow-medical-xl ${className}`}
+    className={`bg-white/85 backdrop-blur-2xl border border-[#F1E9DB] rounded-[2.5rem] shadow-medical-xl GlassContainer ${className}`}
   >
     {children}
   </motion.div>

@@ -42,19 +42,18 @@ export default function App() {
     
     try {
       console.log("API CALL: Starting analyzeResults with token authentication...");
-      // Call backend with ALL accumulated data
-      const detailedRisks = await analyzeResults(
-        results.motor, 
-        results.facial, 
-        results // Pass full results object for extra biomarkers
+      // Call backend with correct key mapping
+      const analysisResponse = await analyzeResults(
+        results.reflex_ms, 
+        results.facial_ms, 
+        results 
       );
       
-      console.log("API SUCCESS: Backend analysis returned:", detailedRisks);
-      setTestResults({ ...results, detailedRisks });
+      console.log("API SUCCESS: Backend response:", analysisResponse);
+      setTestResults({ ...results, ...analysisResponse });
     } catch (err) {
       console.error("API FAILURE: Backend analysis failed, triggering local fallback", err);
-      // Ensure we still have results even if backend fails
-      setTestResults({ ...results, detailedRisks: null });
+      setTestResults({ ...results });
     } finally {
       console.log("FLOW: Setting data ready, transitioning to results stage shortly.");
       setIsDataReady(true);
@@ -83,7 +82,7 @@ export default function App() {
   const showHeader = ['hub', 'test', 'analyzing', 'results'].includes(stage);
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-slate-800 font-sans selection:bg-teal-500/30 relative flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-[#E3DFD6] text-slate-800 font-sans selection:bg-teal-500/30 relative flex flex-col overflow-x-hidden">
       {stage === 'intro' ? (
         <div className="fixed inset-0 bg-[#f0fdf4] -z-10" />
       ) : (
@@ -91,7 +90,7 @@ export default function App() {
       )}
 
       {showHeader && (
-        <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center bg-white/40 backdrop-blur-md border-b border-[#F1E9DB]">
+        <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center bg-white/40 backdrop-blur-md header-container">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setStage('hub')}>
             <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center shadow-medical border border-[#F1E9DB] relative group transition-all hover:shadow-medical-lg">
               <Fingerprint className="text-teal-700 w-7 h-7 transition-transform group-hover:scale-110" />
@@ -102,22 +101,27 @@ export default function App() {
             </div>
           </div>
           
-          <nav className="hidden md:flex items-center gap-8">
-            {user && user.name && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-teal-50 rounded-xl border border-teal-100">
-                <UserIcon size={14} className="text-teal-600" />
-                <span className="text-xs font-bold text-teal-800">Dr. {user.name.split(' ')[0]}</span>
-              </div>
-            )}
-            <button className={`text-sm font-bold transition-colors ${stage === 'hub' ? 'text-teal-700' : 'text-slate-500 hover:text-teal-700'}`} onClick={() => setStage('hub')}>Hub</button>
-            <div className="h-4 w-[1px] bg-[#F1E9DB]" />
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all"
-            >
-              <LogOut size={16} />
-              Exit Portal
-            </button>
+          <nav className="hidden md:flex flex-col items-end gap-2">
+            <div className="flex items-center gap-8">
+              {user && user.name && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-teal-50 rounded-xl border border-teal-100">
+                  <UserIcon size={14} className="text-teal-600" />
+                  <span className="text-xs font-bold text-teal-800">Client: {user.name.split(' ')[0]}</span>
+                </div>
+              )}              <button className={`text-sm font-bold transition-colors ${stage === 'hub' ? 'text-teal-700' : 'text-slate-500 hover:text-teal-700'}`} onClick={() => setStage('hub')}>Hub</button>
+              <div className="h-4 w-[1px] bg-[#F1E9DB]" />
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all"
+              >
+                <LogOut size={16} />
+                Exit Portal
+              </button>
+            </div>
+            <div className="flex gap-1 pr-1">
+              <div className="h-1 w-10 bg-teal-600/30 rounded-full" />
+              <div className="h-1 w-5 bg-rose-400/30 rounded-full" />
+            </div>
           </nav>
         </header>
       )}
@@ -133,7 +137,15 @@ export default function App() {
           )}
 
           {stage === 'hub' && (
-            <DashboardHub key="hub" onStartTest={() => setStage('test')} user={user} />
+            <DashboardHub 
+              key="hub" 
+              onStartTest={() => setStage('test')} 
+              onViewResult={(results) => {
+                setTestResults(results);
+                setStage('results');
+              }}
+              user={user} 
+            />
           )}
 
           {stage === 'test' && (
@@ -173,11 +185,6 @@ export default function App() {
 
       <footer className="relative z-20 w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-[#F1E9DB] bg-white/20">
         <p className="font-bold text-[10px] tracking-wider uppercase text-slate-400">GDG Open Innovation • AI Healthcare Division</p>
-        <div className="flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          <span>Privacy Protocol</span>
-          <span>HIPAA Compliant</span>
-          <span>v1.0.4-PRO</span>
-        </div>
       </footer>
 
       <style dangerouslySetInnerHTML={{__html: `

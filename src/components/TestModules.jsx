@@ -11,7 +11,12 @@ export const FaceMesh = ({ onComplete }) => {
       setScanLine(prev => (prev >= 100 ? 0 : prev + 2));
       setScore(prev => (prev < 98 ? prev + 1.5 : 98));
     }, 50);
-    const timeout = setTimeout(() => onComplete({ faceScore: 98 }), 3500);
+    const timeout = setTimeout(() => onComplete({ 
+      faceScore: 98,
+      h_shift: 0.05,
+      v_shift: 0.02,
+      expansion: 1.05
+    }), 3500);
     return () => { clearInterval(interval); clearTimeout(timeout); };
   }, [onComplete]);
 

@@ -10,6 +10,65 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #FDFBF7;
+  background-color: #E3DFD6;
   color: #1e293b;
+}
+
+.header-container {
+  border-bottom: 1px solid #0D9488; /* Clinical Teal */
+}
+
+@media print {
+  header, footer, nav, button, .no-print, .AmbientBackground {
+    display: none !important;
+  }
+  
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .GlassContainer, div {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    display: block !important;
+    position: relative !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  td, th {
+    background: white !important;
+  }
+
+  /* Ensure the report section fills the page */
+  .max-w-7xl {
+    max-width: 100% !important;
+  }
 }

@@ -141,7 +141,11 @@ const DashboardHub = ({ onStartTest, user }) => {
         <div className="w-20 h-20 rounded-[2rem] bg-white flex items-center justify-center shadow-medical border border-[#F1E9DB] mb-8">
           <Stethoscope className="text-teal-600 w-10 h-10" />
         </div>
-        <h2 className="text-5xl font-black text-slate-900 tracking-tight mb-4">Diagnostic Command</h2>
+        <h2 className="text-5xl font-black text-slate-900 tracking-tight mb-2">Diagnostic Command</h2>
+        <div className="flex items-center justify-center gap-1.5 mb-6">
+          <div className="h-1.5 w-16 bg-teal-600 rounded-full" />
+          <div className="h-1.5 w-8 bg-emerald-400 rounded-full" />
+        </div>
         <p className="text-slate-500 font-medium text-lg max-w-xl">
           Welcome to the NeuroDect Control Hub. Select a protocol to review implementation details or begin a screening.
         </p>
@@ -248,7 +252,10 @@ const DashboardHub = ({ onStartTest, user }) => {
                         </div>
                       </td>
                       <td className="p-6 text-right">
-                        <button className="p-2 rounded-lg border border-[#F1E9DB] text-slate-400 hover:text-teal-700 hover:border-teal-200 hover:bg-teal-50 transition-all">
+                        <button 
+                          onClick={() => onViewResult(item)}
+                          className="p-2 rounded-lg border border-[#F1E9DB] text-slate-400 hover:text-teal-700 hover:border-teal-200 hover:bg-teal-50 transition-all"
+                        >
                           <ChevronRight size={18} />
                         </button>
                       </td>

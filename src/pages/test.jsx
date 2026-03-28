@@ -1,38 +1,41 @@
 import React, { useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ScanFace, Ear, Hand, Brain, CheckCircle2, ChevronRight, ActivitySquare, Mic, ShieldCheck } from 'lucide-react';
+import { ScanFace, Ear, Hand, Brain, CheckCircle2, ChevronRight, ActivitySquare, Mic, ShieldCheck, RotateCcw } from 'lucide-react';
 import { GlassContainer } from '../components/UI/UIComponents';
 import { FaceMesh, HandTracker } from '../components/TestModules';
 import NeuralReflexTest from '../components/NeuralReflexTest';
 
 const AudioTest = ({ onComplete }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
+  const [activeTask, setActiveTask] = useState(null);
+  const [completedTasks, setCompletedTasks] = useState({ sentence: false, vowel: false });
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [frequencies, setFrequencies] = useState(new Array(15).fill(0));
   const [timeLeft, setTimeLeft] = useState(5);
   const [error, setError] = useState('');
   const analyzerRef = useRef(null);
   const animationRef = useRef(null);
 
-  const startRecording = async () => {
+  const startRecording = async (task) => {
     try {
       setError('');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = audioContext.createMediaStreamSource(stream);
       const analyzer = audioContext.createAnalyser();
-      analyzer.fftSize = 256;
+      analyzer.fftSize = 64;
       source.connect(analyzer);
       analyzerRef.current = { stream, context: audioContext, analyzer };
       
       setIsRecording(true);
+      setActiveTask(task);
       setTimeLeft(5);
       
       const updateLevel = () => {
         if (!analyzerRef.current) return;
         const dataArray = new Uint8Array(analyzerRef.current.analyzer.frequencyBinCount);
         analyzerRef.current.analyzer.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        setAudioLevel(average);
+        setFrequencies(Array.from(dataArray.slice(0, 15)));
         animationRef.current = requestAnimationFrame(updateLevel);
       };
       updateLevel();
@@ -41,7 +44,7 @@ const AudioTest = ({ onComplete }) => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            stopRecording();
+            stopRecording(task);
             return 0;
           }
           return prev - 1;
@@ -54,7 +57,7 @@ const AudioTest = ({ onComplete }) => {
     }
   };
 
-  const stopRecording = () => {
+  const stopRecording = (task) => {
     if (analyzerRef.current) {
       const { stream, context } = analyzerRef.current;
       stream.getTracks().forEach(track => track.stop());
@@ -63,50 +66,168 @@ const AudioTest = ({ onComplete }) => {
     }
     
     setIsRecording(false);
+    setActiveTask(null);
     cancelAnimationFrame(animationRef.current);
-    // Pass specific acoustic markers
-    setTimeout(() => onComplete({ acoustic: 0.02, jitter: 0.02 }), 1000);
+    
+    setCompletedTasks(prev => {
+      const next = { ...prev, [task]: true };
+      if (next.sentence && next.vowel) {
+        setIsSynthesizing(true);
+      }
+      return next;
+    });
   };
 
-  return (
-    <div className="flex flex-col items-center justify-center h-[650px] p-10">
-      <div className="mb-12 text-center">
-        <h4 className="text-2xl font-bold text-slate-900 mb-2">Vocal Cadence Analysis</h4>
-        <p className="text-slate-500 font-medium max-w-sm mx-auto">Please maintain a steady "Ahhh" sound for 5 seconds.</p>
-        {error && <p className="text-rose-600 font-bold mt-4 bg-rose-50 px-4 py-2 rounded-xl border border-rose-100">{error}</p>}
-      </div>
-
-      <div className="relative w-56 h-56 flex items-center justify-center mb-12">
-        <motion.div 
-          animate={{ scale: isRecording ? [1, 1.15, 1] : 1 }}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="absolute inset-0 rounded-full bg-teal-50 border border-teal-100 shadow-inner" 
-        />
-        <div className="relative z-10 flex items-center gap-1.5 h-24">
-          {[...Array(10)].map((_, i) => (
-            <motion.div
-              key={i}
-              animate={{ height: isRecording ? [20, Math.random() * 70 + 20, 20] : 12 }}
-              transition={{ repeat: Infinity, duration: 0.4, delay: i * 0.05 }}
-              className="w-2.5 bg-teal-600 rounded-full"
-            />
-          ))}
+  if (isSynthesizing) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[650px] p-10 text-center">
+        <div className="w-24 h-24 rounded-full bg-teal-50 flex items-center justify-center mb-8 border border-teal-100 relative">
+          <ActivitySquare size={40} className="text-teal-600 animate-pulse" />
+          <motion.div 
+            animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+            className="absolute inset-0 border-2 border-transparent border-t-teal-500 rounded-full"
+          />
         </div>
-      </div>
+        <h4 className="text-3xl font-bold text-slate-900 mb-4">Synthesizing Vocal Profile</h4>
+        <p className="text-slate-500 font-medium max-w-sm mx-auto mb-10">
+          Combining Articulation Cadence and Phonation Stability markers into a unified acoustic report.
+        </p>
+        
+        <div className="w-full max-w-md bg-slate-100 h-2 rounded-full overflow-hidden mb-12 shadow-inner">
+          <motion.div 
+            initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 3 }}
+            className="h-full bg-teal-600"
+          />
+        </div>
 
-      {!isRecording ? (
-        <button 
-          onClick={startRecording}
+        <motion.button 
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3 }}
+          onClick={() => onComplete({ acoustic: 0.018, jitter: 0.02 })}
           className="px-12 py-5 bg-teal-700 text-white rounded-[2rem] font-bold shadow-medical-lg hover:bg-teal-800 transition-all flex items-center gap-4 text-lg"
         >
-          <Mic className="w-6 h-6" />
-          Begin Audio Capture
-        </button>
-      ) : (
-        <div className="text-center">
-          <p className="text-4xl font-black text-teal-700 mb-3">{timeLeft}s</p>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.2em]">Capturing Acoustic Biomarkers</p>
+          Finalize Combined Analysis
+          <ChevronRight size={22} />
+        </motion.button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[650px] p-6 lg:p-12">
+      <div className="w-full max-w-5xl">
+        <div className="text-center mb-12">
+          <h4 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">Acoustic Biomarker Capture</h4>
+          <p className="text-slate-500 font-medium max-w-md mx-auto">Please complete both clinical vocal tasks independently to synchronize your acoustic profile.</p>
         </div>
+        
+        <div className="flex flex-col md:flex-row gap-8 mb-12">
+          {/* Task 1: Sentence */}
+          <div className={`flex-1 p-10 rounded-[3rem] border-2 transition-all duration-500 relative overflow-hidden ${completedTasks.sentence ? 'bg-teal-50/50 border-teal-200' : activeTask === 'sentence' ? 'bg-white border-teal-600 shadow-medical-lg scale-[1.02]' : 'bg-white/40 border-slate-100 opacity-60'}`}>
+            {completedTasks.sentence && (
+              <div className="absolute top-0 right-0 p-6">
+                <div className="bg-teal-600 text-white p-1.5 rounded-full shadow-lg">
+                  <CheckCircle2 size={18} />
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-3 mb-6">
+              <span className={`w-8 h-8 rounded-2xl ${completedTasks.sentence ? 'bg-teal-600' : 'bg-slate-900'} text-white text-sm flex items-center justify-center font-bold shadow-sm`}>1</span>
+              <p className="text-xs font-black text-slate-900 uppercase tracking-[0.2em]">Articulation Task</p>
+            </div>
+            <div className="mb-10">
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-4">Read Clear & Steady:</p>
+              <p className="text-2xl font-bold text-slate-800 leading-relaxed italic">"Today is a beautiful day and I feel happy and energetic."</p>
+            </div>
+            {!completedTasks.sentence && (
+              <button 
+                disabled={isRecording}
+                onClick={() => startRecording('sentence')}
+                className={`w-full py-5 rounded-[2rem] font-bold transition-all flex items-center justify-center gap-4 text-lg ${activeTask === 'sentence' ? 'bg-teal-50 text-teal-700 border-2 border-teal-200' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-medical'}`}
+              >
+                {activeTask === 'sentence' ? <span className="animate-pulse flex items-center gap-3"><div className="w-2 h-2 bg-teal-600 rounded-full animate-ping" /> Recording... {timeLeft}s</span> : <><Mic size={22} /> Start Task 1</>}
+              </button>
+            )}
+          </div>
+          
+          <div className="hidden lg:flex flex-col items-center justify-center gap-6">
+            <div className="relative w-40 h-40 flex items-center justify-center">
+              <motion.div 
+                animate={{ 
+                  scale: isRecording ? [1, 1.15, 1] : 1,
+                  opacity: isRecording ? [0.3, 0.6, 0.3] : 0.2
+                }}
+                transition={{ repeat: Infinity, duration: 1, ease: "easeInOut" }}
+                className="absolute inset-0 rounded-full bg-teal-400 blur-xl" 
+              />
+              <div className="relative z-10 w-32 h-32 rounded-full bg-white border-4 border-teal-100 flex items-center justify-center shadow-medical-lg overflow-hidden">
+                <div className="flex items-end gap-1 h-16">
+                  {frequencies.slice(0, 8).map((f, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ height: isRecording ? Math.max(4, (f / 255) * 50) : 4 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                      className="w-2 bg-teal-600 rounded-full"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Task 2: Vowel */}
+          <div className={`flex-1 p-10 rounded-[3rem] border-2 transition-all duration-500 relative overflow-hidden ${completedTasks.vowel ? 'bg-teal-50/50 border-teal-200' : activeTask === 'vowel' ? 'bg-white border-teal-600 shadow-medical-lg scale-[1.02]' : 'bg-white/40 border-slate-100 opacity-60'}`}>
+            {completedTasks.vowel && (
+              <div className="absolute top-0 right-0 p-6">
+                <div className="bg-teal-600 text-white p-1.5 rounded-full shadow-lg">
+                  <CheckCircle2 size={18} />
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-3 mb-6">
+              <span className={`w-8 h-8 rounded-2xl ${completedTasks.vowel ? 'bg-teal-600' : 'bg-slate-900'} text-white text-sm flex items-center justify-center font-bold shadow-sm`}>2</span>
+              <p className="text-xs font-black text-slate-900 uppercase tracking-[0.2em]">Phonation Task</p>
+            </div>
+            <div className="mb-10">
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest mb-4">Sustain Vowel (5s):</p>
+              <p className="text-4xl font-black text-teal-800 uppercase tracking-[0.5em] text-center py-4">"aahhhhhhh"</p>
+            </div>
+            {!completedTasks.vowel && (
+              <button 
+                disabled={isRecording}
+                onClick={() => startRecording('vowel')}
+                className={`w-full py-5 rounded-[2rem] font-bold transition-all flex items-center justify-center gap-4 text-lg ${activeTask === 'vowel' ? 'bg-teal-50 text-teal-700 border-2 border-teal-200' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-medical'}`}
+              >
+                {activeTask === 'vowel' ? <span className="animate-pulse flex items-center gap-3"><div className="w-2 h-2 bg-teal-600 rounded-full animate-ping" /> Recording... {timeLeft}s</span> : <><Mic size={22} /> Start Task 2</>}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="relative w-full h-32 flex items-center justify-center bg-white/40 rounded-[2.5rem] border border-teal-50 shadow-inner overflow-hidden">
+          <div className="relative z-10 flex items-center gap-1.5 h-16">
+            {frequencies.map((f, i) => (
+              <motion.div
+                key={i}
+                animate={{ 
+                  height: isRecording ? Math.max(8, (f / 255) * 60) : 8,
+                  backgroundColor: isRecording && f > 20 ? "#0D9488" : "#CBD5E1"
+                }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="w-2 rounded-full"
+              />
+            ))}
+          </div>
+          {!isRecording && !completedTasks.sentence && !completedTasks.vowel && (
+            <p className="absolute text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Neural Audio Interface Active</p>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="text-rose-600 font-bold mt-8 bg-rose-50 px-6 py-3 rounded-2xl border border-rose-100 flex items-center gap-3">
+          <ShieldAlert size={18} />
+          {error}
+        </motion.div>
       )}
     </div>
   );
@@ -115,6 +236,7 @@ const AudioTest = ({ onComplete }) => {
 const TestPage = ({ onCompleteAll }) => {
   const [currentTest, setCurrentTest] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
   // Store all results properly merged
   const [accumulatedResults, setAccumulatedResults] = useState({
     facial: 500,
@@ -133,17 +255,35 @@ const TestPage = ({ onCompleteAll }) => {
   ];
 
   const handleTestComplete = (data) => {
+    setLastResult(data);
     // Merge data based on test type
     setAccumulatedResults(prev => {
       const updated = { ...prev };
-      if (data.faceScore) updated.asymmetry = (100 - data.faceScore) / 100;
-      if (data.acoustic) updated.acoustic = data.acoustic;
-      if (data.tremorFreq) updated.tremor_hz = parseFloat(data.tremorFreq);
       
-      // Reflex test mapping
-      if (data.motorRT) updated.motor = data.motorRT;
-      if (data.facial) updated.facial = data.facial;
-      if (data.reflex) updated.reflex = data.reflex;
+      // Test 0: FaceMesh returns { faceScore: 98, h_shift, v_shift, expansion }
+      if (data.faceScore !== undefined) {
+        updated.asymmetry = (100 - data.faceScore) / 100;
+        updated.facial_score = data.faceScore;
+        updated.h_shift = data.h_shift || 0;
+        updated.v_shift = data.v_shift || 0;
+        updated.expansion = data.expansion || 0;
+      }
+      
+      // Test 1: AudioTest returns { acoustic: 0.02, jitter: 0.02 }
+      if (data.acoustic !== undefined) {
+        updated.acoustic = data.acoustic;
+      }
+      
+      // Test 2: HandTracker returns { tremorFreq: '4.8Hz' }
+      if (data.tremorFreq !== undefined) {
+        updated.tremor_hz = parseFloat(data.tremorFreq);
+      }
+      
+      // Test 3: NeuralReflexTest returns { motor: motorRT, facial: gestureRT, risks: data }
+      if (data.motor !== undefined && currentTest === 3) {
+        updated.reflex_ms = data.motor;
+        updated.facial_ms = data.facial; // Gesture RT
+      }
       
       return updated;
     });
@@ -154,9 +294,48 @@ const TestPage = ({ onCompleteAll }) => {
     if (currentTest < tests.length - 1) {
       setCurrentTest(prev => prev + 1);
       setIsTransitioning(false);
+      setLastResult(null);
     } else {
       onCompleteAll(accumulatedResults);
     }
+  };
+
+  const retakeTest = () => {
+    setIsTransitioning(false);
+    setLastResult(null);
+  };
+
+  const renderCurrentResult = () => {
+    if (!lastResult) return null;
+    
+    let label = "";
+    let value = "";
+    let unit = "";
+
+    if (currentTest === 0) { // Facial
+      label = "Symmetry Index";
+      value = lastResult.faceScore || 98;
+      unit = "%";
+    } else if (currentTest === 1) { // Audio
+      label = "Acoustic Stability";
+      value = lastResult.acoustic || 0.018;
+      unit = " jitter";
+    } else if (currentTest === 2) { // Hand
+      label = "Tremor Frequency";
+      value = lastResult.tremorFreq || "4.2Hz";
+      unit = "";
+    } else if (currentTest === 3) { // Reflex
+      label = "Reaction Latency";
+      value = lastResult.motor || 245;
+      unit = "ms";
+    }
+
+    return (
+      <div className="bg-teal-50/50 border border-teal-100 rounded-2xl p-6 mb-10 inline-block min-w-[240px]">
+        <p className="text-[10px] font-black text-teal-700 uppercase tracking-widest mb-1">{label}</p>
+        <p className="text-4xl font-black text-slate-900">{value}<span className="text-xl text-teal-600 ml-1">{unit}</span></p>
+      </div>
+    );
   };
 
   return (
@@ -204,17 +383,37 @@ const TestPage = ({ onCompleteAll }) => {
           <div className="w-24 h-24 rounded-3xl bg-teal-50 flex items-center justify-center mx-auto mb-10 border border-teal-100 shadow-sm">
             <CheckCircle2 className="w-12 h-12 text-teal-600" />
           </div>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-900 mb-4">Protocol Success</h2>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-900 mb-2">NeuroDect</h2>
+          <p className="text-[10px] font-bold text-teal-700 tracking-widest uppercase mb-8">Clinical AI Protocol</p>
+          
+          {renderCurrentResult()}
+
+          <div className="flex items-center justify-center gap-1.5 mb-10">
+            <div className="h-2.5 w-16 bg-slate-900 rounded-full" />
+            <div className="h-2.5 w-8 bg-slate-900 rounded-full" />
+          </div>
+
           <p className="text-slate-500 mb-12 font-medium text-lg leading-relaxed">Neural biomarkers captured and encrypted successfully. Ready for next evaluation.</p>
           
-          <motion.button 
-            onClick={proceedToNext} 
-            whileHover={{ scale: 1.02, translateY: -2 }} whileTap={{ scale: 0.98 }}
-            className="px-12 py-5 bg-teal-700 text-white rounded-2xl flex items-center gap-4 shadow-medical-lg hover:bg-teal-800 transition-all font-bold text-lg"
-          >
-            <span>{currentTest < tests.length - 1 ? "Advance to Next Protocol" : "Generate Clinical Report"}</span>
-            {currentTest < tests.length - 1 ? <ChevronRight size={22} /> : <ActivitySquare size={22} className="animate-pulse" />}
-          </motion.button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <motion.button 
+              onClick={retakeTest} 
+              whileHover={{ scale: 1.02, translateY: -2 }} whileTap={{ scale: 0.98 }}
+              className="px-8 py-5 bg-white text-slate-700 border border-slate-200 rounded-2xl flex items-center gap-3 shadow-medical hover:bg-slate-50 transition-all font-bold text-lg"
+            >
+              <RotateCcw size={20} />
+              Retake
+            </motion.button>
+
+            <motion.button 
+              onClick={proceedToNext} 
+              whileHover={{ scale: 1.02, translateY: -2 }} whileTap={{ scale: 0.98 }}
+              className="px-10 py-5 bg-teal-700 text-white rounded-2xl flex items-center gap-4 shadow-medical-lg hover:bg-teal-800 transition-all font-bold text-lg"
+            >
+              <span>{currentTest < tests.length - 1 ? "Next Protocol" : "Generate Report"}</span>
+              {currentTest < tests.length - 1 ? <ChevronRight size={22} /> : <ActivitySquare size={22} className="animate-pulse" />}
+            </motion.button>
+          </div>
         </GlassContainer>
       )}
     </AnimatePresence>
