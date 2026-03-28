@@ -16,10 +16,11 @@ import {
   Microscope,
   History,
   Calendar,
-  Clock
+  Clock,
+  Bell
 } from 'lucide-react';
 import { GlassContainer } from '../components/UI/UIComponents';
-import { getHistory } from '../lib/api';
+import { getHistory, toggleReminders } from '../lib/api';
 
 const ProtocolModal = ({ protocol, onClose }) => {
   if (!protocol) return null;
@@ -53,7 +54,7 @@ const ProtocolModal = ({ protocol, onClose }) => {
                 </span>
               </div>
             </div>
-            <button onClose={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
               <X size={24} />
             </button>
           </div>
@@ -84,10 +85,12 @@ const ProtocolModal = ({ protocol, onClose }) => {
   );
 };
 
-const DashboardHub = ({ onStartTest, user }) => {
+const DashboardHub = ({ onStartTest, onViewResult, user }) => {
   const [selectedProtocol, setSelectedProtocol] = useState(null);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [remindersEnabled, setRemindersEnabled] = useState(user?.reminders_enabled || false);
+  const [remindersLoading, setRemindersLoading] = useState(false);
 
   useEffect(() => {
     fetchHistory();
@@ -98,6 +101,16 @@ const DashboardHub = ({ onStartTest, user }) => {
     const data = await getHistory();
     setHistory(data);
     setLoadingHistory(false);
+  };
+
+  const handleToggleReminders = async () => {
+    setRemindersLoading(true);
+    const nextState = !remindersEnabled;
+    const result = await toggleReminders(nextState);
+    if (result && result.status === 'success') {
+      setRemindersEnabled(nextState);
+    }
+    setRemindersLoading(false);
   };
 
   const protocols = [
@@ -180,16 +193,36 @@ const DashboardHub = ({ onStartTest, user }) => {
         ))}
       </div>
 
-      <div className="flex justify-center mb-20">
-        <motion.button 
-          onClick={onStartTest}
-          whileHover={{ scale: 1.02, translateY: -4 }} whileTap={{ scale: 0.98 }}
-          className="flex items-center gap-4 px-12 py-6 bg-teal-700 text-white rounded-[2.5rem] font-black text-xl shadow-xl shadow-teal-200 hover:bg-teal-800 transition-all group"
-        >
-          <PlusCircle size={28} />
-          Initialize New Screening
-          <ArrowUpRight size={24} className="opacity-50 group-hover:opacity-100 transition-all" />
-        </motion.button>
+      <div className="flex flex-col lg:flex-row gap-10 mb-20">
+        <div className="flex-grow flex justify-center items-center">
+          <motion.button 
+            onClick={onStartTest}
+            whileHover={{ scale: 1.02, translateY: -4 }} whileTap={{ scale: 0.98 }}
+            className="flex items-center gap-4 px-12 py-6 bg-teal-700 text-white rounded-[2.5rem] font-black text-xl shadow-xl shadow-teal-200 hover:bg-teal-800 transition-all group w-full justify-center"
+          >
+            <PlusCircle size={28} />
+            Initialize New Screening
+            <ArrowUpRight size={24} className="opacity-50 group-hover:opacity-100 transition-all" />
+          </motion.button>
+        </div>
+
+        <GlassContainer className="p-8 border-[#F1E9DB] bg-white shadow-sm flex flex-col items-center text-center lg:w-[350px]">
+          <div className={`w-12 h-12 rounded-2xl ${remindersEnabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'} flex items-center justify-center mb-4 transition-colors`}>
+            <Bell className={remindersEnabled ? "animate-pulse" : ""} size={24} />
+          </div>
+          <h3 className="font-bold text-slate-900 mb-2">Monthly Reminders</h3>
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed mb-6">
+            Enable Gmail notifications to maintain your clinical history.
+          </p>
+          <button 
+            onClick={handleToggleReminders}
+            disabled={remindersLoading}
+            className={`w-full py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${remindersEnabled ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            {remindersLoading ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 
+             remindersEnabled ? 'Active' : 'Enable Notifications'}
+          </button>
+        </GlassContainer>
       </div>
 
       {/* History Section */}
@@ -210,8 +243,7 @@ const DashboardHub = ({ onStartTest, user }) => {
               <thead>
                 <tr className="bg-[#F9F6F0]/60">
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Date & Time</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Motor RT</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Gesture RT</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Overall Efficiency</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Overall Risk</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-[#F1E9DB]">Report</th>
                 </tr>
@@ -219,11 +251,11 @@ const DashboardHub = ({ onStartTest, user }) => {
               <tbody className="divide-y divide-[#F1E9DB]">
                 {loadingHistory ? (
                   <tr>
-                    <td colSpan="5" className="p-20 text-center text-slate-400 italic font-medium">Synchronizing history...</td>
+                    <td colSpan="4" className="p-20 text-center text-slate-400 italic font-medium">Synchronizing history...</td>
                   </tr>
                 ) : history.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="p-20 text-center text-slate-400 italic font-medium">No previous screenings found.</td>
+                    <td colSpan="4" className="p-20 text-center text-slate-400 italic font-medium">No previous screenings found.</td>
                   </tr>
                 ) : (
                   history.map((item) => (
@@ -235,10 +267,12 @@ const DashboardHub = ({ onStartTest, user }) => {
                         </div>
                       </td>
                       <td className="p-6">
-                        <span className="font-mono font-bold text-teal-700">{Math.round(item.reaction_time_ms)}ms</span>
-                      </td>
-                      <td className="p-6">
-                        <span className="font-mono font-bold text-blue-600">{Math.round(item.facial_ms || 0)}ms</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-grow max-w-[100px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500" style={{ width: `${Math.round(100 - (item.asymmetry_index || 0)*100)}%` }} />
+                          </div>
+                          <span className="font-mono font-bold text-blue-600">{Math.round(100 - (item.asymmetry_index || 0)*100)}%</span>
+                        </div>
                       </td>
                       <td className="p-6">
                         <div className="flex items-center gap-3">

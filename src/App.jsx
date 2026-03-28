@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Fingerprint, LogOut, User as UserIcon, Activity as ActivitySquare } from 'lucide-react';
+import { Fingerprint, LogOut, User as UserIcon, Activity as ActivitySquare, MapPin } from 'lucide-react';
 import { AmbientBackground } from './components/UI/UIComponents';
 import Landing from './pages/index';
 import TestPage from './pages/test';
@@ -16,24 +16,9 @@ export default function App() {
   const [testResults, setTestResults] = useState(null);
   const [isDataReady, setIsDataReady] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [showHospitalModal, setShowHospitalModal] = useState(false);
 
   // Persistence: Check for existing session
-  useEffect(() => {
-    const initSession = async () => {
-      try {
-        const userData = await getMe();
-        if (userData) {
-          setUser(userData);
-          setStage('hub');
-        }
-      } catch (err) {
-        console.error("Session initialization failed", err);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-    initSession();
-  }, []);
 
   const handleAllTestsComplete = async (results) => {
     console.log("CRITICAL: All tests complete. Data package received:", results);
@@ -42,7 +27,6 @@ export default function App() {
     
     try {
       console.log("API CALL: Starting analyzeResults with token authentication...");
-      // Call backend with correct key mapping
       const analysisResponse = await analyzeResults(
         results.reflex_ms, 
         results.facial_ms, 
@@ -84,10 +68,39 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#E3DFD6] text-slate-800 font-sans selection:bg-teal-500/30 relative flex flex-col overflow-x-hidden">
       {/* Global Team Branding */}
-      <div className="fixed top-8 left-8 z-[100] pointer-events-none hidden lg:flex flex-col">
+      <div className="fixed top-8 left-8 z-[100] pointer-events-none hidden lg:flex flex-col text-left">
         <span className="text-[14px] font-black text-teal-800 tracking-[0.4em]">DINEURO</span>
         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Innovation Team</span>
       </div>
+
+      {/* Hospital Support Modal */}
+      <AnimatePresence>
+        {showHospitalModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 lg:p-12">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowHospitalModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar"
+            >
+              <div className="absolute top-6 right-6 z-10">
+                <button 
+                  onClick={() => setShowHospitalModal(false)}
+                  className="p-2 bg-slate-100 text-slate-400 rounded-full hover:bg-rose-50 hover:text-rose-600 transition-all"
+                >
+                  <LogOut size={20} className="rotate-90" />
+                </button>
+              </div>
+              <Dashboard results={null} forcedNearbyOnly={true} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {stage === 'intro' ? (
         <div className="fixed inset-0 bg-[#f0fdf4] -z-10" />
@@ -98,7 +111,7 @@ export default function App() {
       {showHeader && (
         <header className="relative z-20 w-full px-8 py-6 flex justify-between items-center bg-white/40 backdrop-blur-md header-container">
           <div className="flex items-center gap-6">
-            <div className="flex flex-col border-r border-teal-100 pr-6 mr-2">
+            <div className="flex flex-col border-r border-teal-100 pr-6 mr-2 hidden lg:flex">
               <span className="text-[14px] font-black text-teal-800 tracking-[0.4em]">DINEURO</span>
               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Innovation Team</span>
             </div>
@@ -120,8 +133,20 @@ export default function App() {
                   <UserIcon size={14} className="text-teal-600" />
                   <span className="text-xs font-bold text-teal-800">Client: {user.name.split(' ')[0]}</span>
                 </div>
-              )}              <button className={`text-sm font-bold transition-colors ${stage === 'hub' ? 'text-teal-700' : 'text-slate-500 hover:text-teal-700'}`} onClick={() => setStage('hub')}>Hub</button>
+              )}
+              
+              <button 
+                onClick={() => setShowHospitalModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-teal-100 rounded-xl text-teal-700 text-xs font-bold hover:bg-teal-50 transition-all shadow-sm"
+              >
+                <MapPin size={14} />
+                Medical Support
+              </button>
+
+              <button className={`text-sm font-bold transition-colors ${stage === 'hub' ? 'text-teal-700' : 'text-slate-500 hover:text-teal-700'}`} onClick={() => setStage('hub')}>Hub</button>
+              
               <div className="h-4 w-[1px] bg-[#F1E9DB]" />
+              
               <button 
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm font-bold border border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all"
@@ -178,14 +203,14 @@ export default function App() {
               <div className="flex flex-wrap justify-center gap-6">
                 <button 
                   onClick={() => setStage('test')}
-                  className="px-10 py-5 bg-white text-teal-700 border-2 border-teal-100 rounded-2xl font-bold shadow-medical hover:bg-teal-50 transition-all active:scale-95 text-lg flex items-center gap-3"
+                  className="px-10 py-5 bg-white text-teal-700 border-2 border-teal-100 rounded-2xl font-bold shadow-medical hover:bg-teal-50 transition-all active:scale-95 text-lg flex items-center gap-3 no-print"
                 >
                   <ActivitySquare size={24} />
                   Re-run Screening
                 </button>
                 <button 
                   onClick={() => setStage('hub')}
-                  className="px-10 py-5 bg-teal-700 text-white rounded-2xl font-bold shadow-medical-xl hover:bg-teal-800 transition-all active:scale-95 text-lg"
+                  className="px-10 py-5 bg-teal-700 text-white rounded-2xl font-bold shadow-medical-xl hover:bg-teal-800 transition-all active:scale-95 text-lg no-print"
                 >
                   Return to Protocol Hub
                 </button>
@@ -196,7 +221,13 @@ export default function App() {
       </main>
 
       <footer className="relative z-20 w-full px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4 border-t border-[#F1E9DB] bg-white/20">
-        <p className="font-bold text-[10px] tracking-wider uppercase text-slate-400">GDG Open Innovation • AI Healthcare Division</p>
+        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+          <p className="font-bold text-[10px] tracking-wider uppercase text-slate-400">GDG Open Innovation • AI Healthcare Division</p>
+          <div className="h-4 w-px bg-slate-300 hidden md:block" />
+          <p className="text-[9px] font-medium text-slate-400 max-w-md text-center md:text-left leading-tight italic">
+            Disclaimer: NeuroDect results are for informational screening purposes only and do not substitute professional neurological evaluation.
+          </p>
+        </div>
       </footer>
 
       <style dangerouslySetInnerHTML={{__html: `
