@@ -2,22 +2,31 @@ import os
 import math
 import uuid
 import asyncio
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import asyncpg
+from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, status
+from pydantic import BaseModel, EmailStr
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 load_dotenv()
 
 app = FastAPI()
 
-# Password hashing setup - forcing bcrypt for reliability
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# JWT Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-for-development")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
 
-# Enable CORS for frontend communication
+# Password hashing setup
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,22 +40,17 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # DATA MODELS
 # =========================
 
-from pydantic import BaseModel, Field
-
 class UserRegister(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     password: str
 
-class UserLogin(BaseModel):
-    email: str = Field(..., alias="username") # Accept both email and username
-    password: str
-
-    class Config:
-        populate_by_name = True # Allow using 'email' in the code even if 'username' is passed
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
 
 class ReactionData(BaseModel):
-    user_id: Optional[str] = None
     motor_ms: float
     facial_ms: float
     asymmetry_index: float = 0.0
@@ -60,73 +64,137 @@ class RiskResult(BaseModel):
     insight: str
 
 # =========================
+# AUTH UTILITIES
+# =========================
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    db_pool = await get_pool()
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow("SELECT user_id, name, email FROM users WHERE user_id = $1", uuid.UUID(user_id))
+        if user is None:
+            raise credentials_exception
+        user_dict = dict(user)
+        # Convert UUID to string for consistent handling
+        user_dict['user_id'] = str(user_dict['user_id'])
+        return user_dict
+
+# =========================
+# DATABASE CONNECTION POOL
+# =========================
+
+pool = None
+
+async def get_pool():
+    global pool
+    if pool is None:
+        if not DATABASE_URL:
+            print("DATABASE_URL not set!")
+            return None
+        pool = await asyncpg.create_pool(DATABASE_URL)
+    return pool
+
+# =========================
 # DB INITIALIZATION
 # =========================
 
 async def init_db():
     print("Initializing self-healing database...")
-    if not DATABASE_URL:
-        print("DATABASE_URL not set, skipping DB init.")
+    db_pool = await get_pool()
+    if not db_pool:
         return
     
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        
-        # 1. Ensure tables exist with basic structure
+    async with db_pool.acquire() as conn:
+        # 1. Users Table
         await conn.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT 'Provider',
-                email TEXT DEFAULT '',
-                password_hash TEXT NOT NULL DEFAULT '',
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         ''')
 
-        # Migration: Add missing columns if they don't exist
-        cols = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
-        col_names = [c['column_name'] for c in cols]
-        
-        if 'email' not in col_names:
-            await conn.execute("ALTER TABLE users ADD COLUMN email TEXT DEFAULT ''")
-        if 'password_hash' not in col_names:
-            await conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
-        if 'name' not in col_names:
-            await conn.execute("ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT 'Provider'")
-
-        # Safe UNIQUE constraint handling
-        try:
-            await conn.execute("ALTER TABLE users ADD CONSTRAINT unique_email UNIQUE (email)")
-        except:
-            pass 
-
-        # 2. Screening Results Table
+        # 2. Screening Results Table (Comprehensive Schema)
         await conn.execute('''
             CREATE TABLE IF NOT EXISTS screening_results (
                 session_id SERIAL PRIMARY KEY,
                 user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                asymmetry_index FLOAT,        
-                tremor_frequency_hz FLOAT,    
-                voice_jitter_pct FLOAT,       
-                reaction_time_ms FLOAT,       
+                
+                -- Raw Biomarkers
+                asymmetry_index FLOAT DEFAULT 0.0,
+                tremor_frequency_hz FLOAT DEFAULT 0.0,
+                voice_jitter_pct FLOAT DEFAULT 0.0,
+                reaction_time_ms FLOAT DEFAULT 0.0, -- Motor RT
+                facial_ms FLOAT DEFAULT 0.0,        -- Gesture RT
+                gesture_latency FLOAT DEFAULT 0.0,   -- Specific latency column
+                reflex_ms FLOAT DEFAULT 0.0,        -- Neural Reflex
+                acoustic_ms FLOAT DEFAULT 0.0,      -- Acoustic cadence
+                
+                -- Calculated Disease Risks
                 stroke_risk_pct FLOAT,             
                 parkinsons_risk_pct FLOAT,         
                 essential_tremor_risk_pct FLOAT,   
                 als_risk_pct FLOAT,                
+                
+                -- Summary
                 overall_risk_score FLOAT           
             );
         ''')
+
+        # Migration: Ensure all columns exist
+        tables_to_check = {
+            'screening_results': [
+                ('facial_ms', 'FLOAT'),
+                ('gesture_latency', 'FLOAT'),
+                ('reflex_ms', 'FLOAT'),
+                ('acoustic_ms', 'FLOAT')
+            ]
+        }
+        
+        for table, columns in tables_to_check.items():
+            existing_cols = await conn.fetch(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}'")
+            existing_names = [c['column_name'] for c in existing_cols]
+            for col_name, col_type in columns:
+                if col_name not in existing_names:
+                    print(f"Migrating: Adding {col_name} to {table}")
+                    await conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT 0.0")
+
         print("Database initialized successfully.")
-        await conn.close()
-    except Exception as e:
-        print(f"Database initialization failed: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    if DATABASE_URL and "postgres" in DATABASE_URL:
-        await init_db()
+    await init_db()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if pool:
+        await pool.close()
 
 # =========================
 # AUTHENTICATION ENDPOINTS
@@ -134,67 +202,82 @@ async def startup_event():
 
 @app.post("/register")
 async def register(user: UserRegister):
-    if not DATABASE_URL:
+    db_pool = await get_pool()
+    if not db_pool:
         raise HTTPException(status_code=500, detail="Database not configured")
     
     email_norm = user.email.strip().lower()
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with db_pool.acquire() as conn:
         hashed_password = pwd_context.hash(user.password)
-        
-        # Self-healing logic: UPSERT (Update on conflict)
-        # This allows users to "fix" their account if locked out by signing up again
-        result = await conn.fetchrow(
-            """
-            INSERT INTO users (user_id, name, email, password_hash) 
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (email) DO UPDATE SET 
-                password_hash = EXCLUDED.password_hash,
-                name = EXCLUDED.name,
-                last_active = CURRENT_TIMESTAMP
-            RETURNING user_id, name, email
-            """,
-            uuid.uuid4(), user.name.strip(), email_norm, hashed_password
-        )
-        
-        print(f"User synced/registered: {email_norm}")
-        return {"user_id": str(result['user_id']), "name": result['name'], "email": result['email']}
-    finally:
-        await conn.close()
+        try:
+            # Check if email exists
+            existing = await conn.fetchrow("SELECT user_id FROM users WHERE email = $1", email_norm)
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
 
-@app.post("/login")
-async def login(user: UserLogin):
-    email_norm = user.email.strip().lower()
-    print(f"Login attempt for: {email_norm}")
-    
-    if not DATABASE_URL:
+            u_id = uuid.uuid4()
+            await conn.execute(
+                "INSERT INTO users (user_id, name, email, password_hash) VALUES ($1, $2, $3, $4)",
+                u_id, user.name.strip(), email_norm, hashed_password
+            )
+            
+            access_token = create_access_token(data={"sub": str(u_id)})
+            return {
+                "access_token": access_token, 
+                "token_type": "bearer",
+                "user": {"user_id": str(u_id), "name": user.name.strip(), "email": email_norm}
+            }
+        except Exception as e:
+            if isinstance(e, HTTPException): raise e
+            raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    email_norm = form_data.username.strip().lower()
+    db_pool = await get_pool()
+    if not db_pool:
         raise HTTPException(status_code=500, detail="Database not configured")
     
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
+    async with db_pool.acquire() as conn:
         db_user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email_norm)
-        if not db_user:
-            print(f"Login failed: Email {email_norm} not found")
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not db_user or not pwd_context.verify(form_data.password, db_user['password_hash']):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
-        stored_hash = db_user['password_hash']
-        
-        if not stored_hash or stored_hash == '':
-            print(f"Login failed: User {email_norm} has legacy empty password")
-            raise HTTPException(status_code=401, detail="Account repair required. Please use 'Create Account' with this email.")
-
-        if not pwd_context.verify(user.password, stored_hash):
-            print(f"Login failed: Password mismatch for {email_norm}")
-            raise HTTPException(status_code=401, detail="Invalid email or password")
-        
-        print(f"Login successful for user: {db_user['name']}")
+        access_token = create_access_token(data={"sub": str(db_user['user_id'])})
         return {
-            "user_id": str(db_user['user_id']),
-            "name": db_user['name'],
-            "email": db_user['email']
+            "access_token": access_token, 
+            "token_type": "bearer",
+            "user": {
+                "user_id": str(db_user['user_id']),
+                "name": db_user['name'],
+                "email": db_user['email']
+            }
         }
-    finally:
-        await conn.close()
+
+@app.get("/me")
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    return current_user
+
+# =========================
+# HISTORY ENDPOINT
+# =========================
+
+@app.get("/history")
+async def get_history(current_user: dict = Depends(get_current_user)):
+    db_pool = await get_pool()
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM screening_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
+            uuid.UUID(current_user['user_id'])
+        )
+        return [dict(r) for r in rows]
 
 # =========================
 # CORE UTILITIES
@@ -211,7 +294,7 @@ def normalize(value: float, mean: float, std: float) -> float:
 # =========================
 
 @app.post("/analyze_reaction", response_model=List[RiskResult])
-async def analyze_reaction(data: ReactionData):
+async def analyze_reaction(data: ReactionData, current_user: dict = Depends(get_current_user)):
     motor = data.motor_ms
     facial = data.facial_ms
     asymmetry = data.asymmetry_index
@@ -238,21 +321,23 @@ async def analyze_reaction(data: ReactionData):
         {"disease": "ALS", "risk_percentage": round(als_score * 100, 1), "dependence_level": "Moderate", "insight": f"Neuromotor delay (z={motor_z:.2f}) + speech jitter proxy ({jitter:.2f})"}
     ]
 
-    if DATABASE_URL and "postgres" in DATABASE_URL and data.user_id:
+    db_pool = await get_pool()
+    if db_pool:
         try:
-            conn = await asyncpg.connect(DATABASE_URL)
             overall = sum(r["risk_percentage"] for r in risks) / 4.0
-            await conn.execute('''
-                INSERT INTO screening_results (
-                    user_id, asymmetry_index, tremor_frequency_hz, voice_jitter_pct, reaction_time_ms,
-                    stroke_risk_pct, parkinsons_risk_pct, essential_tremor_risk_pct, als_risk_pct,
-                    overall_risk_score
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ''', 
-            uuid.UUID(data.user_id), asymmetry, tremor, jitter, motor,
-            stroke_score * 100, parkinson_score * 100, et_score * 100, als_score * 100,
-            overall)
-            await conn.close()
+            async with db_pool.acquire() as conn:
+                await conn.execute('''
+                    INSERT INTO screening_results (
+                        user_id, asymmetry_index, tremor_frequency_hz, voice_jitter_pct, reaction_time_ms,
+                        facial_ms, gesture_latency,
+                        stroke_risk_pct, parkinsons_risk_pct, essential_tremor_risk_pct, als_risk_pct,
+                        overall_risk_score
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ''', 
+                uuid.UUID(current_user['user_id']), asymmetry, tremor, jitter, motor,
+                facial, facial, # gesture_latency uses facial_ms value
+                stroke_score * 100, parkinson_score * 100, et_score * 100, als_score * 100,
+                overall)
         except Exception as e:
             print(f"Database insertion error: {e}")
 

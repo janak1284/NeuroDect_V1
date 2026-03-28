@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Fingerprint, Mail, Lock, ArrowRight, ShieldCheck, User, AlertCircle, Loader2 } from 'lucide-react';
 import { GlassContainer } from '../components/UI/UIComponents';
+import { login, register } from '../lib/api';
 
 const LoginPage = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState('login'); // login, signup
@@ -16,37 +17,17 @@ const LoginPage = ({ onLoginSuccess }) => {
     setError('');
     setIsLoading(true);
 
-    const endpoint = mode === 'login' ? '/login' : '/register';
-    const payload = mode === 'login' 
-      ? { email: email.trim().toLowerCase(), password } 
-      : { name: name.trim(), email: email.trim().toLowerCase(), password };
-
     try {
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle list of validation errors or single detail string
-        let errorMessage = 'Authentication failed';
-        if (Array.isArray(data)) {
-          errorMessage = data.map(err => `${err.msg}: ${err.loc.join('.')}`).join(', ');
-        } else if (typeof data.detail === 'string') {
-          errorMessage = data.detail;
-        } else if (typeof data.detail === 'object') {
-          errorMessage = JSON.stringify(data.detail);
-        }
-        throw new Error(errorMessage);
+      let userData;
+      if (mode === 'login') {
+        userData = await login(email.trim().toLowerCase(), password);
+      } else {
+        userData = await register(name.trim(), email.trim().toLowerCase(), password);
       }
 
       // Success
-      onLoginSuccess(data);
+      onLoginSuccess(userData);
     } catch (err) {
-      // Safely convert any error to a string
       setError(err.message || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
