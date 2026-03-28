@@ -90,14 +90,12 @@ const DashboardHub = ({ onStartTest, user }) => {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    if (user?.user_id) {
-      fetchHistory();
-    }
-  }, [user]);
+    fetchHistory();
+  }, []);
 
   const fetchHistory = async () => {
     setLoadingHistory(true);
-    const data = await getHistory(user.user_id);
+    const data = await getHistory();
     setHistory(data);
     setLoadingHistory(false);
   };

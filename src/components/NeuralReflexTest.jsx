@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { Camera, Brain, Activity, Target, ShieldAlert, CheckCircle2, Hand } from 'lucide-react';
+import { Camera, Brain, Activity, Target, ShieldAlert, CheckCircle2, Hand, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Hands } from '@mediapipe/hands';
+import { calculateRisks } from '../lib/api';
 
 const NeuralReflexTest = ({ onComplete }) => {
   const [testState, setTestState] = useState('idle'); // idle, calibrating, waiting, ready, results
@@ -20,6 +22,7 @@ const NeuralReflexTest = ({ onComplete }) => {
   const stateRef = useRef(testState);
   const handsRef = useRef(null);
   const processing = useRef(false);
+  const submitted = useRef(false);
 
   useLayoutEffect(() => {
     stateRef.current = testState;
@@ -170,27 +173,30 @@ const NeuralReflexTest = ({ onComplete }) => {
   };
 
   const submit = async () => {
+    if (submitted.current) return;
+    submitted.current = true;
+
     setTestState('results');
     setLoading(true);
     const conf = computeConfidence();
     setConfidence(conf);
 
-    try {
-      const res = await fetch('http://localhost:8000/analyze_reaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motor_ms: motorRT, facial_ms: gestureRT }),
-      });
-      const data = await res.json();
-      setRisks(data);
-      if (onComplete) {
-        setTimeout(() => onComplete({ motor: motorRT, facial: gestureRT, risks: data }), 4000);
-      }
-    } catch (err) {
-      console.error("Backend error:", err);
-      if (onComplete) {
-        setTimeout(() => onComplete({ motor: motorRT, facial: gestureRT }), 3000);
-      }
+    // Calculate risks locally for immediate UI feedback
+    const localRisks = calculateRisks({ motor: motorRT, facial: gestureRT });
+    // Map the expected backend structure for the UI
+    const mappedRisks = localRisks.map(r => ({
+      disease: r.label,
+      risk_percentage: r.value,
+      insight: `Biometric synchronization variance detected: ${Math.round(Math.abs(motorRT - gestureRT))}ms`
+    }));
+    setRisks(mappedRisks);
+
+    if (onComplete) {
+      setTimeout(() => onComplete({ 
+        motorRT: motorRT, 
+        facial: gestureRT,
+        reflex: motorRT 
+      }), 2000);
     }
     setLoading(false);
   };
@@ -301,6 +307,19 @@ const NeuralReflexTest = ({ onComplete }) => {
             <p className="text-2xl font-bold text-indigo-600">{confidence ? `${confidence.toFixed(0)}%` : '--'}</p>
           </div>
         </div>
+
+        {/* Manual Continue Button - shows when readings are ready but not yet finalized */}
+        {motorRT > 0 && gestureRT > 0 && testState !== 'results' && (
+          <motion.button 
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            onClick={submit}
+            className="px-8 py-3 bg-teal-700 text-white rounded-xl font-bold shadow-medical hover:bg-teal-800 transition-all flex items-center gap-3 animate-bounce"
+          >
+            Submit and Continue
+            <ChevronRight size={18} />
+          </motion.button>
+        )}
+
         <div className="flex flex-col items-end gap-2 opacity-30">
           <ShieldAlert size={32} className="text-slate-400" />
           <span className="text-[8px] font-bold uppercase tracking-[0.3em] text-slate-400">Clinical-XAI-Core</span>

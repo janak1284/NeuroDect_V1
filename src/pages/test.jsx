@@ -139,8 +139,12 @@ const TestPage = ({ onCompleteAll }) => {
       if (data.faceScore) updated.asymmetry = (100 - data.faceScore) / 100;
       if (data.acoustic) updated.acoustic = data.acoustic;
       if (data.tremorFreq) updated.tremor_hz = parseFloat(data.tremorFreq);
-      if (data.motorRT) updated.motor = data.motorRT; // From Reflex test
-      if (data.facial) updated.facial = data.facial; // Direct mapping if present
+      
+      // Reflex test mapping
+      if (data.motorRT) updated.motor = data.motorRT;
+      if (data.facial) updated.facial = data.facial;
+      if (data.reflex) updated.reflex = data.reflex;
+      
       return updated;
     });
     setIsTransitioning(true);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Fingerprint, LogOut, User as UserIcon, Activity as ActivitySquare } from 'lucide-react';
 import { AmbientBackground } from './components/UI/UIComponents';
@@ -8,33 +8,55 @@ import DashboardHub from './pages/DashboardHub';
 import Intro from './pages/Intro';
 import LoginPage from './pages/LoginPage';
 import { Dashboard, AnalyzingScreen } from './components/Dashboard';
-import { analyzeResults } from './lib/api';
+import { analyzeResults, getMe, removeToken } from './lib/api';
 
 export default function App() {
   const [stage, setStage] = useState('intro'); // intro, login, hub, test, analyzing, results
   const [user, setUser] = useState(null); 
   const [testResults, setTestResults] = useState(null);
   const [isDataReady, setIsDataReady] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Persistence: Check for existing session
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const userData = await getMe();
+        if (userData) {
+          setUser(userData);
+          setStage('hub');
+        }
+      } catch (err) {
+        console.error("Session initialization failed", err);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    initSession();
+  }, []);
 
   const handleAllTestsComplete = async (results) => {
-    console.log("All tests complete. Received:", results);
+    console.log("CRITICAL: All tests complete. Data package received:", results);
     setStage('analyzing');
     setIsDataReady(false);
     
     try {
+      console.log("API CALL: Starting analyzeResults with token authentication...");
       // Call backend with ALL accumulated data
       const detailedRisks = await analyzeResults(
         results.motor, 
         results.facial, 
-        user?.user_id,
         results // Pass full results object for extra biomarkers
       );
       
+      console.log("API SUCCESS: Backend analysis returned:", detailedRisks);
       setTestResults({ ...results, detailedRisks });
     } catch (err) {
-      console.error("Backend analysis failed, using local fallback", err);
+      console.error("API FAILURE: Backend analysis failed, triggering local fallback", err);
+      // Ensure we still have results even if backend fails
       setTestResults({ ...results, detailedRisks: null });
     } finally {
+      console.log("FLOW: Setting data ready, transitioning to results stage shortly.");
       setIsDataReady(true);
     }
   };
@@ -45,9 +67,18 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    removeToken();
     setUser(null);
     setStage('intro');
   };
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-teal-100 border-t-teal-700 rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const showHeader = ['hub', 'test', 'analyzing', 'results'].includes(stage);
 

@@ -1,35 +1,99 @@
-/**
- * Core risk calculation logic.
- * Synchronized with backend thresholds for consistent home-use diagnostics.
- */
-export const calculateRisks = (results) => {
-  // Clinical Baselines adjusted for Home-Use / Webcam Latency
-  const motorRT = results.motor || 450;
-  const facialRT = results.facial || 500;
-  
-  // Weights matching backend logic for initial dashboard feedback
-  const parkinsons = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.2 + 10));
-  const stroke = Math.min(95, Math.max(5, ((facialRT - 500) / 15) * 1.5 + 8));
-  const essentialTremor = Math.min(95, Math.max(5, 12)); 
-  const als = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.4 + 12));
+const API_URL = 'http://localhost:8000';
 
-  return [
-    { label: "Parkinson's", value: Math.round(parkinsons), color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "Acute Stroke", value: Math.round(stroke), color: stroke > 70 ? "text-rose-400" : stroke > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "Essential Tremor", value: Math.round(essentialTremor), color: essentialTremor > 70 ? "text-rose-400" : essentialTremor > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "ALS", value: Math.round(als), color: als > 70 ? "text-rose-400" : als > 40 ? "text-amber-400" : "text-emerald-400" },
-  ];
+/**
+ * Auth Helper: Get stored token
+ */
+export const getToken = () => localStorage.getItem('neurodect_token');
+
+/**
+ * Auth Helper: Set stored token
+ */
+export const setToken = (token) => localStorage.setItem('neurodect_token', token);
+
+/**
+ * Auth Helper: Remove stored token
+ */
+export const removeToken = () => localStorage.removeItem('neurodect_token');
+
+/**
+ * Auth Helper: Get Headers with Auth
+ */
+const getHeaders = (isMultipart = false) => {
+  const headers = {};
+  if (!isMultipart) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 };
 
 /**
- * Fetches historical screening results for a specific user.
+ * Auth API: Register
  */
-export const getHistory = async (user_id) => {
-  if (!user_id) return [];
+export const register = async (name, email, password) => {
+  const response = await fetch(`${API_URL}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Registration failed');
+  }
+  const data = await response.json();
+  setToken(data.access_token);
+  return data.user;
+};
+
+/**
+ * Auth API: Login
+ */
+export const login = async (email, password) => {
+  const formData = new FormData();
+  formData.append('username', email); // OAuth2 expects 'username'
+  formData.append('password', password);
+
+  const response = await fetch(`${API_URL}/login`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Login failed');
+  }
+  const data = await response.json();
+  setToken(data.access_token);
+  return data.user;
+};
+
+/**
+ * Auth API: Get current user
+ */
+export const getMe = async () => {
+  const token = getToken();
+  if (!token) return null;
+
+  const response = await fetch(`${API_URL}/me`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) {
+    removeToken();
+    return null;
+  }
+  return response.json();
+};
+
+/**
+ * Fetches historical screening results for the current user.
+ */
+export const getHistory = async () => {
   try {
-    const response = await fetch(`http://localhost:8000/history/${user_id}`, {
+    const response = await fetch(`${API_URL}/history`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
     });
 
     if (!response.ok) throw new Error('Failed to fetch history');
@@ -44,10 +108,9 @@ export const getHistory = async (user_id) => {
 /**
  * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
  */
-export const analyzeResults = async (motor_ms, facial_ms, user_id = null, extraData = {}) => {
+export const analyzeResults = async (motor_ms, facial_ms, extraData = {}) => {
   try {
     const payload = { 
-      user_id, 
       motor_ms: parseFloat(motor_ms) || 450, 
       facial_ms: parseFloat(facial_ms) || 500,
       asymmetry_index: parseFloat(extraData.asymmetry) || 0.0,
@@ -55,9 +118,9 @@ export const analyzeResults = async (motor_ms, facial_ms, user_id = null, extraD
       voice_jitter: parseFloat(extraData.acoustic) || 0.0
     };
 
-    const response = await fetch('http://localhost:8000/analyze_reaction', {
+    const response = await fetch(`${API_URL}/analyze_reaction`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -68,4 +131,24 @@ export const analyzeResults = async (motor_ms, facial_ms, user_id = null, extraD
     console.error("API Analysis Error:", err);
     return null;
   }
+};
+
+/**
+ * Core risk calculation logic (Sync)
+ */
+export const calculateRisks = (results) => {
+  const motorRT = results.motor || 450;
+  const facialRT = results.facial || 500;
+  
+  const parkinsons = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.2 + 10));
+  const stroke = Math.min(95, Math.max(5, ((facialRT - 500) / 15) * 1.5 + 8));
+  const essentialTremor = Math.min(95, Math.max(5, 12)); 
+  const als = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.4 + 12));
+
+  return [
+    { label: "Parkinson's", value: Math.round(parkinsons), color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Acute Stroke", value: Math.round(stroke), color: stroke > 70 ? "text-rose-400" : stroke > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Essential Tremor", value: Math.round(essentialTremor), color: essentialTremor > 70 ? "text-rose-400" : essentialTremor > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "ALS", value: Math.round(als), color: als > 70 ? "text-rose-400" : als > 40 ? "text-amber-400" : "text-emerald-400" },
+  ];
 };

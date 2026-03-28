@@ -61,12 +61,12 @@ export const Dashboard = ({ results }) => {
     );
   }
 
-  // Extract risks from results (either from backend detailedRisks or local fallback)
+  // Robustly extract biomarkers with fallbacks
   const tests = [
-    { id: 'facial', label: 'Facial Asymmetry', icon: <ScanFace size={18} />, value: results.facial || 500, baseline: 500 },
-    { id: 'acoustic', label: 'Acoustic Cadence', icon: <Ear size={18} />, value: results.acoustic || 0.02, baseline: 0.015 },
-    { id: 'motor', label: 'Motor Stability', icon: <Activity size={18} />, value: results.motor || 650, baseline: 450 },
-    { id: 'neural', label: 'Neural Reflex', icon: <Brain size={18} />, value: results.reflex || 320, baseline: 250 },
+    { id: 'facial', label: 'Facial Asymmetry', icon: <ScanFace size={18} />, value: results.asymmetry || 0, baseline: 0.05, type: 'lower' },
+    { id: 'acoustic', label: 'Acoustic Cadence', icon: <Ear size={18} />, value: results.acoustic || 0.015, baseline: 0.02, type: 'lower' },
+    { id: 'motor', label: 'Motor Stability', icon: <Activity size={18} />, value: results.motor || 450, baseline: 450, type: 'higher' },
+    { id: 'neural', label: 'Neural Reflex', icon: <Brain size={18} />, value: results.reflex || 250, baseline: 250, type: 'higher' },
   ];
 
   const diseases = [
@@ -78,11 +78,15 @@ export const Dashboard = ({ results }) => {
 
   // Helper to calculate a synthetic risk percentage per test/disease pair
   const getRisk = (testId, diseaseName) => {
-    // If backend provided detailed risks, we could map them here. 
-    // For now, keeping the robust local calculation logic as a reliable base.
-    const seed = testId.length + diseaseName.length;
     const test = tests.find(t => t.id === testId);
-    const variance = Math.max(0, (test.value - test.baseline) / test.baseline);
+    if (!test) return 5;
+
+    let variance = 0;
+    if (test.type === 'higher') {
+      variance = Math.max(0, (test.value - test.baseline) / test.baseline);
+    } else {
+      variance = Math.max(0, (test.value - test.baseline) / test.baseline);
+    }
     
     let weighting = 1.0;
     if (diseaseName.includes('Parkinson') && testId === 'motor') weighting = 2.5;
@@ -91,98 +95,110 @@ export const Dashboard = ({ results }) => {
     if (diseaseName.includes('Tremor') && testId === 'motor') weighting = 2.0;
     if (testId === 'neural') weighting = 1.5;
 
-    const risk = Math.min(98, Math.max(5, (variance * 100 * weighting) + (seed % 10)));
+    const risk = Math.min(98, Math.max(5, (variance * 100 * weighting) + (testId.length % 10)));
     return Math.round(risk);
   };
 
-  return (
-    <GlassContainer className="max-w-7xl w-full overflow-hidden border-[#F1E9DB] shadow-medical-xl flex flex-col">
-      <div className="p-8 border-b border-[#F1E9DB] bg-[#F9F6F0]/40 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-teal-700 flex items-center justify-center shadow-lg">
-            <ShieldAlert className="w-6 h-6 text-white" />
+  try {
+    return (
+      <GlassContainer className="max-w-7xl w-full overflow-hidden border-[#F1E9DB] shadow-medical-xl flex flex-col">
+        <div className="p-8 border-b border-[#F1E9DB] bg-[#F9F6F0]/40 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-teal-700 flex items-center justify-center shadow-lg">
+              <ShieldAlert className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Clinical Biomarker Matrix</h2>
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest">Diagnostic Report: DN-{Math.floor(Math.random()*10000)}-X</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Clinical Biomarker Matrix</h2>
-            <p className="text-[10px] font-bold text-teal-700 uppercase tracking-widest">Diagnostic Report: DN-{Math.floor(Math.random()*10000)}-X</p>
+          <div className="flex gap-3">
+            <button className="px-5 py-2 bg-white border border-[#F1E9DB] rounded-xl text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-all">Download PDF</button>
+            <button className="px-5 py-2 bg-slate-900 rounded-xl text-xs font-bold text-white shadow-md hover:bg-slate-800 transition-all">Print Results</button>
           </div>
         </div>
-        <div className="flex gap-3">
-          <button className="px-5 py-2 bg-white border border-[#F1E9DB] rounded-xl text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 transition-all">Download PDF</button>
-          <button className="px-5 py-2 bg-slate-900 rounded-xl text-xs font-bold text-white shadow-md hover:bg-slate-800 transition-all">Print Results</button>
-        </div>
-      </div>
 
-      <div className="flex flex-col lg:flex-row overflow-x-auto">
-        <div className="p-8 w-full">
-          <table className="w-full border-collapse min-w-[800px]">
-            <thead>
-              <tr>
-                <th className="p-4 text-left bg-[#FDFBF7] border border-[#F1E9DB] rounded-tl-2xl">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Condition / Protocol</span>
-                </th>
-                {tests.map(test => (
-                  <th key={test.id} className="p-6 text-center bg-[#F9F6F0]/60 border border-[#F1E9DB]">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-white border border-[#F1E9DB] flex items-center justify-center text-teal-600 shadow-sm">
-                        {test.icon}
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 whitespace-nowrap">{test.label}</span>
-                    </div>
+        <div className="flex flex-col lg:flex-row overflow-x-auto">
+          <div className="p-8 w-full">
+            <table className="w-full border-collapse min-w-[800px]">
+              <thead>
+                <tr>
+                  <th className="p-4 text-left bg-[#FDFBF7] border border-[#F1E9DB] rounded-tl-2xl">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Condition / Protocol</span>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {diseases.map((disease, dIdx) => (
-                <tr key={disease.name} className="group hover:bg-[#FDFBF7] transition-colors">
-                  <td className="p-6 border border-[#F1E9DB] bg-white group-hover:bg-teal-50/10">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">{disease.icon}</span>
-                      <span className="font-bold text-slate-800">{disease.name}</span>
-                    </div>
-                  </td>
-                  {tests.map(test => {
-                    const risk = getRisk(test.id, disease.name);
-                    const colorClass = risk > 70 ? 'text-rose-600 bg-rose-50 border-rose-100' : 
-                                     risk > 40 ? 'text-amber-600 bg-amber-50 border-amber-100' : 
-                                     'text-teal-600 bg-teal-50 border-teal-100';
-                    return (
-                      <td key={test.id} className="p-6 border border-[#F1E9DB] text-center bg-white group-hover:bg-transparent">
-                        <div className={`inline-flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 ${colorClass} transition-transform group-hover:scale-110 shadow-sm`}>
-                          <span className="text-lg font-black">{risk}%</span>
-                          <span className="text-[8px] font-bold uppercase tracking-tighter">Risk</span>
+                  {tests.map(test => (
+                    <th key={test.id} className="p-6 text-center bg-[#F9F6F0]/60 border border-[#F1E9DB]">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-10 h-10 rounded-xl bg-white border border-[#F1E9DB] flex items-center justify-center text-teal-600 shadow-sm">
+                          {test.icon}
                         </div>
-                      </td>
-                    );
-                  })}
+                        <span className="text-xs font-bold text-slate-700 whitespace-nowrap">{test.label}</span>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {diseases.map((disease, dIdx) => (
+                  <tr key={disease.name} className="group hover:bg-[#FDFBF7] transition-colors">
+                    <td className="p-6 border border-[#F1E9DB] bg-white group-hover:bg-teal-50/10">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{disease.icon}</span>
+                        <span className="font-bold text-slate-800">{disease.name}</span>
+                      </div>
+                    </td>
+                    {tests.map(test => {
+                      const risk = getRisk(test.id, disease.name);
+                      const colorClass = risk > 70 ? 'text-rose-600 bg-rose-50 border-rose-100' : 
+                                       risk > 40 ? 'text-amber-600 bg-amber-50 border-amber-100' : 
+                                       'text-teal-600 bg-teal-50 border-teal-100';
+                      return (
+                        <td key={test.id} className="p-6 border border-[#F1E9DB] text-center bg-white group-hover:bg-transparent">
+                          <div className={`inline-flex flex-col items-center justify-center w-20 h-20 rounded-full border-2 ${colorClass} transition-transform group-hover:scale-110 shadow-sm`}>
+                            <span className="text-lg font-black">{risk}%</span>
+                            <span className="text-[8px] font-bold uppercase tracking-tighter">Risk</span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      <div className="p-8 bg-[#F9F6F0]/40 border-t border-[#F1E9DB] grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white p-6 rounded-2xl border border-[#F1E9DB] shadow-sm">
-          <div className="flex items-center gap-2 mb-4 text-teal-700">
-            <Terminal size={18} />
-            <h4 className="text-sm font-bold uppercase tracking-widest">Diagnostic Logic Breakdown</h4>
+        <div className="p-8 bg-[#F9F6F0]/40 border-t border-[#F1E9DB] grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white p-6 rounded-2xl border border-[#F1E9DB] shadow-sm">
+            <div className="flex items-center gap-2 mb-4 text-teal-700">
+              <Terminal size={18} />
+              <h4 className="text-sm font-bold uppercase tracking-widest">Diagnostic Logic Breakdown</h4>
+            </div>
+            <p className="text-sm text-slate-500 leading-relaxed font-medium">
+              Risk percentages are calculated by correlating the variance between your captured biomarkers and clinical baselines. The matrix highlights how each specific test contributes to the overall screening profile for each condition.
+            </p>
           </div>
-          <p className="text-sm text-slate-500 leading-relaxed font-medium">
-            Risk percentages are calculated by correlating the variance between your captured biomarkers and clinical baselines. The matrix highlights how each specific test contributes to the overall screening profile for each condition.
-          </p>
-        </div>
-        <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 shadow-sm">
-          <div className="flex items-center gap-2 mb-4 text-amber-700">
-            <AlertTriangle size={18} />
-            <h4 className="text-sm font-bold uppercase tracking-widest">Clinical Advisory</h4>
+          <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 text-amber-700">
+              <AlertTriangle size={18} />
+              <h4 className="text-sm font-bold uppercase tracking-widest">Clinical Advisory</h4>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed font-medium">
+              This screening tool is for informational purposes. If any condition shows a risk percentage above 60%, we strongly recommend sharing this report with a licensed neurologist for a comprehensive evaluation.
+            </p>
           </div>
-          <p className="text-sm text-slate-600 leading-relaxed font-medium">
-            This screening tool is for informational purposes. If any condition shows a risk percentage above 60%, we strongly recommend sharing this report with a licensed neurologist for a comprehensive evaluation.
-          </p>
         </div>
-      </div>
-    </GlassContainer>
-  );
+      </GlassContainer>
+    );
+  } catch (err) {
+    console.error("Dashboard Rendering Error:", err);
+    return (
+      <GlassContainer className="max-w-xl w-full p-16 text-center border-rose-100">
+        <AlertTriangle className="w-16 h-16 text-rose-600 mx-auto mb-6" />
+        <h2 className="text-2xl font-bold text-slate-900">Report Generation Failed</h2>
+        <p className="text-slate-500 mt-2">An error occurred while compiling your clinical report. Please try again.</p>
+        <button onClick={() => window.location.reload()} className="mt-8 px-8 py-3 bg-slate-900 text-white rounded-xl font-bold">Restart System</button>
+      </GlassContainer>
+    );
+  }
 };

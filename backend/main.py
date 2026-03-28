@@ -2,22 +2,31 @@ import os
 import math
 import uuid
 import asyncio
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import asyncpg
+from typing import List, Optional
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Depends, status
+from pydantic import BaseModel, EmailStr
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 load_dotenv()
 
 app = FastAPI()
 
-# Password hashing setup - forcing bcrypt for reliability
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# JWT Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-for-development")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
 
-# Enable CORS for frontend communication
+# Password hashing setup
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,22 +40,17 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # DATA MODELS
 # =========================
 
-from pydantic import BaseModel, Field
-
 class UserRegister(BaseModel):
     name: str
-    email: str
+    email: EmailStr
     password: str
 
-class UserLogin(BaseModel):
-    email: str = Field(..., alias="username") # Accept both email and username
-    password: str
-
-    class Config:
-        populate_by_name = True # Allow using 'email' in the code even if 'username' is passed
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
 
 class ReactionData(BaseModel):
-    user_id: Optional[str] = None
     motor_ms: float
     facial_ms: float
     asymmetry_index: float = 0.0
@@ -58,6 +62,44 @@ class RiskResult(BaseModel):
     risk_percentage: float
     dependence_level: str
     insight: str
+
+# =========================
+# AUTH UTILITIES
+# =========================
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    db_pool = await get_pool()
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow("SELECT user_id, name, email FROM users WHERE user_id = $1", uuid.UUID(user_id))
+        if user is None:
+            raise credentials_exception
+        user_dict = dict(user)
+        # Convert UUID to string for consistent handling
+        user_dict['user_id'] = str(user_dict['user_id'])
+        return user_dict
 
 # =========================
 # DATABASE CONNECTION POOL
@@ -168,46 +210,64 @@ async def register(user: UserRegister):
     async with db_pool.acquire() as conn:
         hashed_password = pwd_context.hash(user.password)
         try:
-            result = await conn.fetchrow(
-                """
-                INSERT INTO users (user_id, name, email, password_hash) 
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (email) DO UPDATE SET 
-                    password_hash = EXCLUDED.password_hash,
-                    name = EXCLUDED.name,
-                    last_active = CURRENT_TIMESTAMP
-                RETURNING user_id, name, email
-                """,
-                uuid.uuid4(), user.name.strip(), email_norm, hashed_password
+            # Check if email exists
+            existing = await conn.fetchrow("SELECT user_id FROM users WHERE email = $1", email_norm)
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+
+            u_id = uuid.uuid4()
+            await conn.execute(
+                "INSERT INTO users (user_id, name, email, password_hash) VALUES ($1, $2, $3, $4)",
+                u_id, user.name.strip(), email_norm, hashed_password
             )
-            return {"user_id": str(result['user_id']), "name": result['name'], "email": result['email']}
+            
+            access_token = create_access_token(data={"sub": str(u_id)})
+            return {
+                "access_token": access_token, 
+                "token_type": "bearer",
+                "user": {"user_id": str(u_id), "name": user.name.strip(), "email": email_norm}
+            }
         except Exception as e:
+            if isinstance(e, HTTPException): raise e
             raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/login")
-async def login(user: UserLogin):
-    email_norm = user.email.strip().lower()
+@app.post("/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    email_norm = form_data.username.strip().lower()
     db_pool = await get_pool()
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database not configured")
     
     async with db_pool.acquire() as conn:
         db_user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email_norm)
-        if not db_user or not pwd_context.verify(user.password, db_user['password_hash']):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not db_user or not pwd_context.verify(form_data.password, db_user['password_hash']):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
+        access_token = create_access_token(data={"sub": str(db_user['user_id'])})
         return {
-            "user_id": str(db_user['user_id']),
-            "name": db_user['name'],
-            "email": db_user['email']
+            "access_token": access_token, 
+            "token_type": "bearer",
+            "user": {
+                "user_id": str(db_user['user_id']),
+                "name": db_user['name'],
+                "email": db_user['email']
+            }
         }
+
+@app.get("/me")
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    return current_user
 
 # =========================
 # HISTORY ENDPOINT
 # =========================
 
-@app.get("/history/{user_id}")
-async def get_history(user_id: str):
+@app.get("/history")
+async def get_history(current_user: dict = Depends(get_current_user)):
     db_pool = await get_pool()
     if not db_pool:
         raise HTTPException(status_code=500, detail="Database not configured")
@@ -215,7 +275,7 @@ async def get_history(user_id: str):
     async with db_pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT * FROM screening_results WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50",
-            uuid.UUID(user_id)
+            uuid.UUID(current_user['user_id'])
         )
         return [dict(r) for r in rows]
 
@@ -234,7 +294,7 @@ def normalize(value: float, mean: float, std: float) -> float:
 # =========================
 
 @app.post("/analyze_reaction", response_model=List[RiskResult])
-async def analyze_reaction(data: ReactionData):
+async def analyze_reaction(data: ReactionData, current_user: dict = Depends(get_current_user)):
     motor = data.motor_ms
     facial = data.facial_ms
     asymmetry = data.asymmetry_index
@@ -262,7 +322,7 @@ async def analyze_reaction(data: ReactionData):
     ]
 
     db_pool = await get_pool()
-    if db_pool and data.user_id:
+    if db_pool:
         try:
             overall = sum(r["risk_percentage"] for r in risks) / 4.0
             async with db_pool.acquire() as conn:
@@ -274,7 +334,7 @@ async def analyze_reaction(data: ReactionData):
                         overall_risk_score
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 ''', 
-                uuid.UUID(data.user_id), asymmetry, tremor, jitter, motor,
+                uuid.UUID(current_user['user_id']), asymmetry, tremor, jitter, motor,
                 facial, facial, # gesture_latency uses facial_ms value
                 stroke_score * 100, parkinson_score * 100, et_score * 100, als_score * 100,
                 overall)
