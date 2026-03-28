@@ -217,7 +217,7 @@ async def register(user: UserRegister):
 
             u_id = uuid.uuid4()
             await conn.execute(
-                "INSERT INTO users (user_id, name, email, password_hash) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO users (user_id, name, email, hashed_password) VALUES ($1, $2, $3, $4)",
                 u_id, user.name.strip(), email_norm, hashed_password
             )
             
@@ -240,7 +240,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     
     async with db_pool.acquire() as conn:
         db_user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email_norm)
-        if not db_user or not pwd_context.verify(form_data.password, db_user['password_hash']):
+        if not db_user or not pwd_context.verify(form_data.password, db_user['hashed_password']):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -336,14 +336,14 @@ async def analyze_reaction(data: ReactionData, current_user: dict = Depends(get_
                 row = await conn.fetchrow('''
                     INSERT INTO screening_results (
                         user_id, asymmetry_index, tremor_frequency_hz, voice_jitter_pct, reaction_time_ms,
-                        facial_ms, gesture_latency,
+                        facial_ms, gesture_latency, reflex_ms, acoustic_ms,
                         stroke_risk_pct, parkinsons_risk_pct, essential_tremor_risk_pct, als_risk_pct,
                         overall_risk_score, h_shift, v_shift, expansion, bells_palsy_risk_pct
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                     RETURNING *
                 ''', 
                 uuid.UUID(current_user['user_id']), asymmetry, tremor, jitter, motor,
-                facial, facial,
+                facial, facial, motor, jitter, # mapping reflex_ms to motor and acoustic_ms to jitter
                 stroke_score * 100, parkinson_score * 100, et_score * 100, als_score * 100,
                 overall, h_shift, v_shift, expansion, bells_palsy_score * 100)
                 
