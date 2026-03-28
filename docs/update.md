@@ -61,5 +61,11 @@ The following table describes the dependence of each disease risk on the measure
 - **Longitudinal Tracking:** Test results sent via `analyzeResults` are now linked to the authenticated `user_id`, enabling historical trend analysis and personalized health reports.
 - **Dashboard Profile:** The results dashboard now displays the patient's profile to ensure report authenticity.
 
+### 4. Auth Fix & Database Migration (March 28)
+- **Resolved "Unable to Fetch" Error:** Fixed a 500 Internal Server Error during account creation.
+- **Bcrypt Compatibility:** Downgraded `bcrypt` to `4.0.1` in `requirements.txt` to resolve a known compatibility issue between `passlib` and `bcrypt 5.0.0` on Python 3.14.
+- **Robust DB Initialization:** Updated `backend/main.py` to automatically migrate existing `users` tables, adding missing `email` and `hashed_password` columns if they were created before the Auth update.
+- **Validation:** Added `email-validator` to ensure robust Pydantic model validation for user registrations.
+
 ---
-**Status:** Authentication implemented; Data persistence linked to user profiles; Ready for longitudinal feature development.
+**Status:** Authentication fully functional; Database schema synchronized; Bcrypt compatibility resolved. Ready for final MVP testing.

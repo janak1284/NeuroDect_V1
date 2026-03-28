@@ -73,11 +73,16 @@ async def init_db():
         await conn.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY,
-                email TEXT UNIQUE,
-                hashed_password TEXT,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 last_active TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
+        ''')
+        
+        # Ensure email and hashed_password columns exist (for existing tables)
+        await conn.execute('''
+            ALTER TABLE users 
+            ADD COLUMN IF NOT EXISTS email TEXT UNIQUE,
+            ADD COLUMN IF NOT EXISTS hashed_password TEXT;
         ''')
 
         # 2. Screening Results Table
