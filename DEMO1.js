@@ -47,33 +47,36 @@ const CustomCursor = () => {
   );
 };
 
-const AmbientBackground = () => (
+const AmbientBackground = ({ isTestActive }) => (
   <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-[#030712]">
     {/* Noise Texture */}
     <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E")' }}></div>
-    {/* Glowing Orbs */}
-    <motion.div 
-      animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
-      transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-      className="absolute -top-[20%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-cyan-900/40 blur-[120px]" 
-    />
-    <motion.div 
-      animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0.15, 0.1] }}
-      transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-      className="absolute top-[40%] -right-[10%] w-[40vw] h-[40vw] rounded-full bg-violet-900/40 blur-[100px]" 
-    />
-    {/* Tech Grid */}
+    
+    {!isTestActive && (
+      <>
+        <motion.div 
+          animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-[20%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-cyan-900/40 blur-[120px]" 
+        />
+        <motion.div 
+          animate={{ scale: [1, 1.5, 1], opacity: [0.1, 0.15, 0.1] }}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          className="absolute top-[40%] -right-[10%] w-[40vw] h-[40vw] rounded-full bg-violet-900/40 blur-[100px]" 
+        />
+      </>
+    )}
     <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_60%_at_50%_50%,#000_10%,transparent_100%)]" />
   </div>
 );
 
-const GlassContainer = ({ children, className = "" }) => (
+const GlassContainer = ({ children, className = "", isTestActive = false }) => (
   <motion.div 
     initial={{ opacity: 0, y: 20, scale: 0.95 }}
     animate={{ opacity: 1, y: 0, scale: 1 }}
     exit={{ opacity: 0, y: -20, scale: 0.95 }}
     transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-    className={`bg-white/[0.02] backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] ${className}`}
+    className={`${isTestActive ? 'bg-black/60' : 'bg-white/[0.02] backdrop-blur-2xl'} border border-white/10 rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] ${className}`}
   >
     {children}
   </motion.div>
@@ -315,21 +318,14 @@ const AnalyzingScreen = ({ onComplete }) => {
 // --- UTILS ---
 
 const calculateRisks = (results) => {
-  // Extract results or use defaults for demo
+  // Clinical Baselines
   const motorRT = results.motor || 250;
   const facialRT = results.facial || 300;
   
-  // Parkinson's: High dependence on Motor RT
-  const parkinsons = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 2 + ((facialRT - 300) / 10) * 1 + 15));
-  
-  // Stroke: High dependence on Facial RT
-  const stroke = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 2.5 + ((motorRT - 250) / 10) * 0.5 + 10));
-
-  // Bell's Palsy: Almost entirely Facial RT
-  const bellsPalsy = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 3 + 5));
-
-  // ALS: High dependence on Motor RT
-  const als = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 2.2 + 8));
+  const parkinsons = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 2.5 + 10));
+  const stroke = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 3.0 + 8));
+  const bellsPalsy = Math.min(95, Math.max(5, ((facialRT - 300) / 10) * 4.0 + 5));
+  const als = Math.min(95, Math.max(5, ((motorRT - 250) / 10) * 1.8 + 12));
 
   return [
     { label: "Parkinson's", value: Math.round(parkinsons), color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
@@ -418,17 +414,17 @@ const ResultsDashboard = ({ results }) => {
             <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex justify-between items-center group hover:bg-white/10 transition-colors">
               <div>
                 <div className="text-emerald-400 font-mono text-xs mb-1">MOTOR LATENCY</div>
-                <div className="text-slate-200 text-sm">{results.motor}ms (Baseline: 250ms)</div>
+                <div className="text-slate-200 text-sm">{results.motor}ms (Baseline: 450ms)</div>
               </div>
-              <Activity className={results.motor > 400 ? "text-rose-500" : "text-emerald-500/50"} />
+              <Activity className={results.motor > 700 ? "text-rose-500" : "text-emerald-500/50"} />
             </div>
             
             <div className="bg-white/5 border border-white/10 rounded-lg p-4 flex justify-between items-center group hover:bg-white/10 transition-colors">
               <div>
                 <div className="text-cyan-400 font-mono text-xs mb-1">FACIAL LATENCY</div>
-                <div className="text-slate-200 text-sm">{results.facial}ms (Baseline: 300ms)</div>
+                <div className="text-slate-200 text-sm">{results.facial}ms (Baseline: 500ms)</div>
               </div>
-              <ScanFace className={results.facial > 450 ? "text-rose-500" : "text-cyan-500/50"} />
+              <ScanFace className={results.facial > 850 ? "text-rose-500" : "text-cyan-500/50"} />
             </div>
 
             <div className="bg-rose-500/5 border border-rose-500/10 rounded-lg p-4 flex justify-between items-center relative overflow-hidden">
@@ -464,7 +460,7 @@ const ResultsDashboard = ({ results }) => {
 export default function App() {
   const [stage, setStage] = useState('landing'); // landing, test, analyzing, results
   const [currentTest, setCurrentTest] = useState(0);
-  const [testResults, setTestResults] = useState({ motor: 250, facial: 300 });
+  const [testResults, setTestResults] = useState({ motor: 650, facial: 800 });
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const tests = [
@@ -672,6 +668,6 @@ export default function App() {
           animation: reverse-spin 2s linear infinite;
         }
       `}} />
-    </div>
-  );
-}
+      </div>
+      );
+      }
