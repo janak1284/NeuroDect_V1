@@ -18,7 +18,7 @@ export const removeToken = () => localStorage.removeItem('neurodect_token');
 /**
  * Auth Helper: Get Headers with Auth
  */
-const getHeaders = (isMultipart = false) => {
+export const getHeaders = (isMultipart = false) => {
   const headers = {};
   if (!isMultipart) {
     headers['Content-Type'] = 'application/json';
@@ -52,12 +52,13 @@ export const register = async (name, email, password) => {
  * Auth API: Login
  */
 export const login = async (email, password) => {
-  const formData = new FormData();
+  const formData = new URLSearchParams();
   formData.append('username', email); // OAuth2 expects 'username'
   formData.append('password', password);
 
   const response = await fetch(`${API_URL}/login`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: formData,
   });
   if (!response.ok) {
@@ -76,14 +77,18 @@ export const getMe = async () => {
   const token = getToken();
   if (!token) return null;
 
-  const response = await fetch(`${API_URL}/me`, {
-    headers: getHeaders(),
-  });
-  if (!response.ok) {
-    removeToken();
+  try {
+    const response = await fetch(`${API_URL}/me`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      removeToken();
+      return null;
+    }
+    return response.json();
+  } catch (e) {
     return null;
   }
-  return response.json();
 };
 
 /**
@@ -106,32 +111,61 @@ export const getHistory = async () => {
 };
 
 /**
- * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
+ * Fetches the clinical consensus and unified results across all 4 tables.
  */
-export const analyzeResults = async (motor_ms, facial_ms, extraData = {}) => {
+export const aggregateResults = async () => {
   try {
-    const payload = { 
-      motor_ms: parseFloat(motor_ms) || 450, 
-      facial_ms: parseFloat(facial_ms) || 500,
-      asymmetry_index: parseFloat(extraData.asymmetry) || 0.0,
-      tremor_hz: parseFloat(extraData.tremor_hz) || 0.0,
-      voice_jitter: parseFloat(extraData.acoustic) || 0.0,
-      h_shift: parseFloat(extraData.h_shift) || 0.0,
-      v_shift: parseFloat(extraData.v_shift) || 0.0,
-      expansion: parseFloat(extraData.expansion) || 0.0
-    };
-
-    const response = await fetch(`${API_URL}/analyze_reaction`, {
-      method: 'POST',
+    const response = await fetch(`${API_URL}/aggregate_results`, {
+      method: 'GET',
       headers: getHeaders(),
-      body: JSON.stringify(payload),
     });
 
-    if (!response.ok) throw new Error('Backend analysis failed');
+    if (!response.ok) throw new Error('Failed to aggregate results');
     
     return await response.json();
   } catch (err) {
-    console.error("API Analysis Error:", err);
+    console.error("API Aggregation Error:", err);
+    return null;
+  }
+};
+
+/**
+ * Sends test results to the FastAPI backend for advanced analysis and DB persistence.
+ * Now routes specifically to the individual test tables.
+ */
+export const analyzeResults = async (motor_ms, facial_ms, extraData = {}) => {
+  try {
+    const results = [];
+    
+    // 1. Send Neural Reflex data
+    const reflexRes = await fetch(`${API_URL}/process_biometrics`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        test_type: 'reflex',
+        raw_data: { motorRT: motor_ms, facial: facial_ms }
+      }),
+    });
+    results.push(await reflexRes.json());
+
+    // 2. Send Audio data if present
+    if (extraData.acoustic) {
+      const audioRes = await fetch(`${API_URL}/process_biometrics`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          test_type: 'audio',
+          raw_data: { acoustic: extraData.acoustic, jitter: extraData.jitter || 0.01 }
+        }),
+      });
+      results.push(await audioRes.json());
+    }
+
+    // Hand and Smile are already sent immediately during their own protocol finalizing in TestModules.jsx
+    
+    return results;
+  } catch (err) {
+    console.error("API Persistence Error:", err);
     return null;
   }
 };
@@ -145,13 +179,13 @@ export const calculateRisks = (results) => {
   
   const parkinsons = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.2 + 10));
   const stroke = Math.min(95, Math.max(5, ((facialRT - 500) / 15) * 1.5 + 8));
-  const essentialTremor = Math.min(95, Math.max(5, 12)); 
+  const bellsPalsy = Math.min(95, Math.max(5, 12)); 
   const als = Math.min(95, Math.max(5, ((motorRT - 450) / 15) * 1.4 + 12));
 
   return [
-    { label: "Parkinson's", value: Math.round(parkinsons), color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "Acute Stroke", value: Math.round(stroke), color: stroke > 70 ? "text-rose-400" : stroke > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "Essential Tremor", value: Math.round(essentialTremor), color: essentialTremor > 70 ? "text-rose-400" : essentialTremor > 40 ? "text-amber-400" : "text-emerald-400" },
-    { label: "ALS", value: Math.round(als), color: als > 70 ? "text-rose-400" : als > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Parkinson's", value: Math.round(parkinsons), key: "parkinsons_risk", color: parkinsons > 70 ? "text-rose-400" : parkinsons > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Acute Stroke", value: Math.round(stroke), key: "stroke_risk", color: stroke > 70 ? "text-rose-400" : stroke > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "Bell's Palsy", value: Math.round(bellsPalsy), key: "bells_palsy_risk", color: bellsPalsy > 70 ? "text-rose-400" : bellsPalsy > 40 ? "text-amber-400" : "text-emerald-400" },
+    { label: "ALS", value: Math.round(als), key: "als_risk", color: als > 70 ? "text-rose-400" : als > 40 ? "text-amber-400" : "text-emerald-400" },
   ];
 };

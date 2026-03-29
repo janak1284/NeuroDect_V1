@@ -111,7 +111,6 @@ const NeuralReflexTest = ({ onComplete }) => {
 
     const process = async () => {
       const currentState = stateRef.current;
-      // Allow processing during 'waiting' to warm up the model, but only if not already processing
       if (videoRef.current && videoRef.current.readyState >= 2 && !processing.current && (currentState === 'ready' || currentState === 'waiting')) {
         processing.current = true;
         try {
@@ -159,8 +158,6 @@ const NeuralReflexTest = ({ onComplete }) => {
     }
   };
 
-  // Removed redundant useLayoutEffect for startTime as it's now handled in the main state sync effect
-
   useEffect(() => {
     if (gestureDetected.current && motorDetected.current) {
       submit();
@@ -181,9 +178,8 @@ const NeuralReflexTest = ({ onComplete }) => {
     const conf = computeConfidence();
     setConfidence(conf);
 
-    // Calculate risks locally for immediate UI feedback
+    // Calculate risks locally for immediate UI feedback BEFORE sending to DB
     const localRisks = calculateRisks({ motor: motorRT, facial: gestureRT });
-    // Map the expected backend structure for the UI
     const mappedRisks = localRisks.map(r => ({
       disease: r.label,
       risk_percentage: r.value,
@@ -191,12 +187,39 @@ const NeuralReflexTest = ({ onComplete }) => {
     }));
     setRisks(mappedRisks);
 
+    const riskScores = {};
+    localRisks.forEach(r => { riskScores[r.key] = r.value; });
+
+    // 1. Save to DB with UI-computed metrics
+    const reflexData = { 
+      motorRT: motorRT, 
+      facial: gestureRT,
+      reflex: motorRT,
+      ...riskScores
+    };
+
+    try {
+      console.log("DEBUG: Sending reflex data to backend...");
+      const res = await fetch('http://localhost:8000/process_biometrics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('neurodect_token')}`
+        },
+        body: JSON.stringify({ test_type: 'reflex', raw_data: reflexData })
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Server error: ${res.status} - ${errorText}`);
+      }
+      console.log("DEBUG: Reflex data saved successfully");
+    } catch (e) { 
+      console.error("DEBUG: Reflex save failed:", e); 
+    }
+
     if (onComplete) {
-      setTimeout(() => onComplete({ 
-        motorRT: motorRT, 
-        facial: gestureRT,
-        reflex: motorRT 
-      }), 2000);
+      setTimeout(() => onComplete(reflexData), 2000);
     }
     setLoading(false);
   };
@@ -244,7 +267,7 @@ const NeuralReflexTest = ({ onComplete }) => {
           )}
           {testState === 'results' && (
             <div className="absolute inset-0 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center transition-all">
-              <div className="w-20 h-20 rounded-full bg-teal-50 flex items-center justify-center mb-6 border border-teal-100">
+              <div className="w-20 h-20 rounded-full bg-teal flex items-center justify-center mb-6 border border-teal-100">
                 <CheckCircle2 size={40} className="text-teal-600" />
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-2">Analysis Synchronized</h3>
@@ -308,7 +331,6 @@ const NeuralReflexTest = ({ onComplete }) => {
           </div>
         </div>
 
-        {/* Manual Continue Button - shows when readings are ready but not yet finalized */}
         {motorRT > 0 && gestureRT > 0 && testState !== 'results' && (
           <motion.button 
             initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
